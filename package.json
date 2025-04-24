@@ -1,0 +1,53 @@
+{
+  "name": "ive-connect",
+  "version": "0.1.0",
+  "description": "A universal haptic device control library for interactive experiences",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean",
+    "prepare": "npm run build",
+    "test": "jest",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": [
+    "haptic",
+    "handy",
+    "buttplug",
+    "device-control",
+    "interactive"
+  ],
+  "author": "",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.14.1",
+    "@typescript-eslint/eslint-plugin": "^8.31.0",
+    "@typescript-eslint/parser": "^8.31.0",
+    "eslint": "^9.25.1",
+    "jest": "^29.7.0",
+    "rimraf": "^6.0.1",
+    "ts-jest": "^29.3.2",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iveplay/ive-connect.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iveplay/ive-connect/issues"
+  },
+  "homepage": "https://github.com/iveplay/ive-connect#readme"
+}
