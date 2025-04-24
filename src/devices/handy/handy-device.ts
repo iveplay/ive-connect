@@ -72,8 +72,8 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
 
     // Create the API client
     this._api = createHandyApi(
-      config?.baseV3Url || "https://www.handyfeeling.com/api/v3",
-      config?.baseV2Url || "https://www.handyfeeling.com/api/v2",
+      config?.baseV3Url || "https://www.handyfeeling.com/api/handy-rest/v3",
+      config?.baseV2Url || "https://www.handyfeeling.com/api/hosting/v2",
       config?.applicationId || "12345",
       this._config.connectionKey
     );
