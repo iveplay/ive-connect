@@ -65,25 +65,42 @@ export function createDeviceCommandExecutor(
         const intensity =
           preferences.intensity !== undefined ? preferences.intensity : 1.0;
 
-        // Calculate speed/strength from the position and apply intensity scaling
-        // For vibration: if same position as previous, use 0 speed (stop vibration)
-        let speed = position * intensity;
+        // Calculate speed/strength based on the position change, not just position
+        // For vibration: calculate based on movement speed/magnitude of change
+        let vibrationSpeed = (Math.abs(pos - prevPos) / 100) * intensity;
+        // Normalize to reasonable range (0-1)
+        vibrationSpeed = Math.min(1.0, vibrationSpeed * 5);
 
-        if (Math.abs(pos - prevPos) < 0.01) {
-          speed = 0;
-        }
+        // For rotation: similar approach
+        const rotationSpeed = vibrationSpeed;
+
+        // For linear devices: use the position directly
+        const linearPosition = position;
+
+        console.log(`Device ${deviceInfo.name} command:`, {
+          vibrationSpeed,
+          rotationSpeed,
+          linearPosition,
+          durationMs,
+        });
 
         // Send appropriate commands based on device capabilities and preferences
         if (deviceInfo.canLinear && preferences.useLinear) {
-          await api.linearDevice(deviceInfo.index, position, durationMs);
+          await api.linearDevice(deviceInfo.index, linearPosition, durationMs);
         }
 
         if (deviceInfo.canVibrate && preferences.useVibrate) {
-          await api.vibrateDevice(deviceInfo.index, speed);
+          // Only vibrate if there's significant movement
+          if (vibrationSpeed > 0.05) {
+            await api.vibrateDevice(deviceInfo.index, vibrationSpeed);
+          }
         }
 
         if (deviceInfo.canRotate && preferences.useRotate) {
-          await api.rotateDevice(deviceInfo.index, speed, true);
+          // Only rotate if there's significant movement
+          if (rotationSpeed > 0.05) {
+            await api.rotateDevice(deviceInfo.index, rotationSpeed, true);
+          }
         }
       } catch (error) {
         console.error(

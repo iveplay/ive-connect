@@ -18,6 +18,8 @@ import {
   DevicePreference,
 } from "./types";
 
+const DEBUG_WEBSOCKET = true;
+
 export class ButtplugApi extends EventEmitter {
   private client: ButtplugClient | null = null;
   private devices: Map<number, ButtplugDeviceInfo> = new Map();
@@ -203,6 +205,9 @@ export class ButtplugApi extends EventEmitter {
    * Send a vibrate command to a device
    */
   async vibrateDevice(index: number, speed: number): Promise<boolean> {
+    if (DEBUG_WEBSOCKET)
+      console.log(`[BUTTPLUG-WS] Vibrate device ${index}: speed=${speed}`);
+
     const device = this.getClientDevice(index);
     if (!device) {
       this.emit("error", `No device with index ${index}`);
@@ -226,6 +231,11 @@ export class ButtplugApi extends EventEmitter {
     position: number,
     duration: number
   ): Promise<boolean> {
+    if (DEBUG_WEBSOCKET)
+      console.log(
+        `[BUTTPLUG-WS] Linear device ${index}: position=${position}, duration=${duration}`
+      );
+
     const device = this.getClientDevice(index);
     if (!device) {
       this.emit("error", `No device with index ${index}`);
@@ -249,6 +259,11 @@ export class ButtplugApi extends EventEmitter {
     speed: number,
     clockwise: boolean
   ): Promise<boolean> {
+    if (DEBUG_WEBSOCKET)
+      console.log(
+        `[BUTTPLUG-WS] Rotate device ${index}: speed=${speed}, clockwise=${clockwise}`
+      );
+
     const device = this.getClientDevice(index);
     if (!device) {
       this.emit("error", `No device with index ${index}`);

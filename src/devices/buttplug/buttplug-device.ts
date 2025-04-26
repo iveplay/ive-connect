@@ -260,6 +260,9 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       } else if (scriptData.url) {
         // If URL is provided, fetch the script
         try {
+          console.log(
+            `[BUTTPLUG-SCRIPT] Fetching script from URL: ${scriptData.url}`
+          );
           const response = await fetch(scriptData.url);
           if (!response.ok) {
             throw new Error(
@@ -267,6 +270,10 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
             );
           }
           scriptContent = await response.json();
+          console.log(
+            `[BUTTPLUG-SCRIPT] Script loaded successfully, actions:`,
+            scriptContent.actions?.length
+          );
         } catch (error) {
           this.emit(
             "error",
@@ -291,6 +298,10 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
         !Array.isArray(scriptContent.actions)
       ) {
         this.emit("error", "Invalid script format: Missing actions array");
+        console.error(
+          "[BUTTPLUG-SCRIPT] Invalid script format:",
+          scriptContent
+        );
         return false;
       }
 
@@ -500,8 +511,23 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
     const elapsedMs =
       (currentTime - this._playbackStartTime) * this._playbackRate;
 
-    // Find all actions that should have been executed by now
-    let actionIndex = this._findActionIndexForTime(elapsedMs);
+    // Debug: Log current time occasionally
+    if (currentTime % 1000 < 50) {
+      // Log roughly every second
+      console.log(
+        `[BUTTPLUG-PLAYBACK] Current script time: ${Math.floor(elapsedMs)}ms`
+      );
+    }
+
+    // Find the action for the current time
+    const actionIndex = this._findActionIndexForTime(elapsedMs);
+
+    // Debug: Log current action index
+    if (actionIndex !== this._lastActionIndex) {
+      console.log(
+        `[BUTTPLUG-PLAYBACK] Found action index: ${actionIndex}, last: ${this._lastActionIndex}`
+      );
+    }
 
     // If we reached the end of the script
     if (
@@ -528,11 +554,14 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
           ? this._currentScriptActions[actionIndex - 1]
           : { pos: 0 };
 
-      // Calculate duration for linear movement
-      let durationMs = 500; // Default duration
+      // Calculate duration for linear movement based on time to next action
+      let durationMs = 500; // Default duration if we can't determine
       if (actionIndex < this._currentScriptActions.length - 1) {
         const nextAction = this._currentScriptActions[actionIndex + 1];
         durationMs = nextAction.at - action.at;
+
+        // Enforce a minimum duration to prevent erratic movement
+        durationMs = Math.max(100, durationMs);
       }
 
       // Execute the action on all devices

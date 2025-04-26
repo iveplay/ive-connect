@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IVE Connect Test App</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <h1>IVE Connect Test App</h1>
+
+      <div class="container">
+        <div class="panel">
+          <h2>Handy Device</h2>
+          <div class="form-group">
+            <label for="handyConnectionKey">Connection Key:</label>
+            <input
+              type="text"
+              id="handyConnectionKey"
+              placeholder="Enter Handy connection key"
+            />
+          </div>
+          <div class="button-group">
+            <button id="handyConnect" class="primary">Connect</button>
+            <button id="handyDisconnect" disabled>Disconnect</button>
+          </div>
+          <div class="status" id="handyStatus">Status: Disconnected</div>
+        </div>
+
+        <div class="panel">
+          <h2>Buttplug Devices</h2>
+          <div class="form-group">
+            <label for="buttplugServerUrl">WebSocket Server URL:</label>
+            <input
+              type="text"
+              id="buttplugServerUrl"
+              value="ws://localhost:12345"
+              placeholder="ws://localhost:12345"
+            />
+          </div>
+          <div class="button-group">
+            <button id="buttplugConnect" class="primary">Connect</button>
+            <button id="buttplugDisconnect" disabled>Disconnect</button>
+            <button id="buttplugScan" disabled>Scan for Devices</button>
+          </div>
+          <div class="status" id="buttplugStatus">Status: Disconnected</div>
+          <div id="deviceList"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="playbackPanel">
+        <h2>Script Playback</h2>
+        <div class="form-group">
+          <label for="scriptUrl">Funscript URL:</label>
+          <input
+            type="text"
+            id="scriptUrl"
+            placeholder="Enter funscript URL"
+            value="https://eroscripts-discourse.eroscripts.com/original/3X/b/d/bd95dd1ab1fc5e275291905eed8893fe53343a35.funscript"
+          />
+          <button id="loadScript" class="secondary">Load Script</button>
+        </div>
+        <div class="form-group">
+          <label for="videoTime">Video Time (ms):</label>
+          <input type="number" id="videoTime" value="0" min="0" />
+        </div>
+        <div class="button-group">
+          <button id="playScript" disabled>Play</button>
+          <button id="stopScript" disabled>Stop</button>
+          <button id="syncTime" disabled>Sync Time</button>
+        </div>
+        <div class="status" id="scriptStatus">Status: No script loaded</div>
+      </div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

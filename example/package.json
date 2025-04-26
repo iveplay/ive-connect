@@ -1,0 +1,17 @@
+{
+  "name": "ive-connect-example",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "parcel ./src/index.html --watch-dir ./src --watch-dir ../src --open"
+  },
+  "dependencies": {
+    "buttplug": "^3.2.2",
+    "buttplug-wasm": "^2.0.1"
+  },
+  "devDependencies": {
+    "buffer": "^6.0.3",
+    "parcel": "^2.9.3",
+    "typescript": "^5.0.0"
+  }
+}
