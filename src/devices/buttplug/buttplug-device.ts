@@ -511,36 +511,21 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
     const elapsedMs =
       (currentTime - this._playbackStartTime) * this._playbackRate;
 
-    // Debug: Log current time occasionally
-    if (currentTime % 1000 < 50) {
-      // Log roughly every second
-      console.log(
-        `[BUTTPLUG-PLAYBACK] Current script time: ${Math.floor(elapsedMs)}ms`
-      );
-    }
-
     // Find the action for the current time
     const actionIndex = this._findActionIndexForTime(elapsedMs);
 
-    // Debug: Log current action index
-    if (actionIndex !== this._lastActionIndex) {
-      console.log(
-        `[BUTTPLUG-PLAYBACK] Found action index: ${actionIndex}, last: ${this._lastActionIndex}`
-      );
-    }
-
     // If we reached the end of the script
     if (
-      actionIndex === -1 ||
-      actionIndex >= this._currentScriptActions.length - 1
+      actionIndex === this._currentScriptActions.length - 1 &&
+      elapsedMs > this._currentScriptActions[actionIndex].at + 1000
     ) {
       if (this._loopPlayback) {
         // Reset for loop playback
         this._playbackStartTime = Date.now();
         this._lastActionIndex = -1;
         return;
-      } else if (actionIndex === -1) {
-        // End of script, stop playback
+      } else {
+        // We're past the end of the script, stop playback
         this.stop().catch(console.error);
         return;
       }
@@ -593,7 +578,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
 
     // If we're before the beginning of the script
     if (timeMs < this._currentScriptActions[0].at) {
-      return -1;
+      return 0;
     }
 
     // Binary search for the action
