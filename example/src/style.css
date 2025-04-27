@@ -58,6 +58,19 @@ input {
   font-size: 16px;
 }
 
+.file-input-wrapper {
+  display: flex;
+  gap: 10px;
+}
+
+input[type="file"] {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
 .button-group {
   display: flex;
   gap: 10px;

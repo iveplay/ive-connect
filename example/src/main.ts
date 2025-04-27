@@ -44,6 +44,8 @@ class IVEConnectTestApp {
     // Playback elements
     scriptUrl: document.getElementById("scriptUrl") as HTMLInputElement,
     loadScript: document.getElementById("loadScript") as HTMLButtonElement,
+    scriptFile: document.getElementById("scriptFile") as HTMLInputElement,
+    uploadScript: document.getElementById("uploadScript") as HTMLButtonElement,
     videoTime: document.getElementById("videoTime") as HTMLInputElement,
     playScript: document.getElementById("playScript") as HTMLButtonElement,
     stopScript: document.getElementById("stopScript") as HTMLButtonElement,
@@ -81,6 +83,9 @@ class IVEConnectTestApp {
 
     // Playback event listeners
     this.elements.loadScript.addEventListener("click", () => this.loadScript());
+    this.elements.uploadScript.addEventListener("click", () =>
+      this.uploadScript()
+    );
     this.elements.playScript.addEventListener("click", () => this.playScript());
     this.elements.stopScript.addEventListener("click", () => this.stopScript());
     this.elements.syncTime.addEventListener("click", () =>
@@ -342,7 +347,7 @@ class IVEConnectTestApp {
   }
 
   /**
-   * Load a script for playback
+   * Load a script from URL for playback
    */
   private async loadScript(): Promise<void> {
     const scriptUrl = this.elements.scriptUrl.value.trim();
@@ -353,7 +358,8 @@ class IVEConnectTestApp {
     }
 
     try {
-      this.elements.scriptStatus.textContent = "Status: Loading script...";
+      this.elements.scriptStatus.textContent =
+        "Status: Loading script from URL...";
       this.elements.loadScript.disabled = true;
 
       const scriptData = {
@@ -361,6 +367,94 @@ class IVEConnectTestApp {
         url: scriptUrl,
       };
 
+      await this.loadScriptToDevices(scriptData);
+    } catch (error) {
+      console.error("Error loading script:", error);
+      this.elements.scriptStatus.textContent = `Status: Error: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`;
+      this.scriptLoaded = false;
+    } finally {
+      this.elements.loadScript.disabled = false;
+      this.updateButtonStates();
+    }
+  }
+
+  /**
+   * Upload and load a script file
+   */
+  private async uploadScript(): Promise<void> {
+    const fileInput = this.elements.scriptFile;
+
+    if (!fileInput.files || fileInput.files.length === 0) {
+      alert("Please select a funscript file to upload");
+      return;
+    }
+
+    const file = fileInput.files[0];
+
+    try {
+      this.elements.scriptStatus.textContent =
+        "Status: Reading uploaded file...";
+      this.elements.uploadScript.disabled = true;
+
+      // Read the file
+      const fileContent = await this.readFileAsText(file);
+      let scriptContent;
+
+      try {
+        scriptContent = JSON.parse(fileContent);
+      } catch (parseError) {
+        throw new Error(
+          "Invalid funscript file format. File must be valid JSON."
+        );
+      }
+
+      // Validate basic funscript structure
+      if (!scriptContent.actions || !Array.isArray(scriptContent.actions)) {
+        throw new Error("Invalid funscript format: Missing actions array");
+      }
+
+      const scriptData = {
+        type: "funscript",
+        content: scriptContent,
+      };
+
+      await this.loadScriptToDevices(scriptData);
+    } catch (error) {
+      console.error("Error uploading script:", error);
+      this.elements.scriptStatus.textContent = `Status: Error: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`;
+      this.scriptLoaded = false;
+    } finally {
+      this.elements.uploadScript.disabled = false;
+      this.updateButtonStates();
+    }
+  }
+
+  /**
+   * Helper function to read a file as text
+   */
+  private readFileAsText(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Failed to read file"));
+      reader.readAsText(file);
+    });
+  }
+
+  /**
+   * Load script to all connected devices
+   */
+  private async loadScriptToDevices(scriptData: any): Promise<void> {
+    if (!this.handyDevice?.isConnected && !this.buttplugDevice?.isConnected) {
+      alert("Please connect at least one device first");
+      return;
+    }
+
+    try {
       // Load script to all connected devices
       const results = await this.deviceManager.loadScriptAll(scriptData);
       const successCount = Object.values(results).filter(Boolean).length;
@@ -376,14 +470,12 @@ class IVEConnectTestApp {
           "Status: Failed to load script on any device";
       }
     } catch (error) {
-      console.error("Error loading script:", error);
+      console.error("Error loading script to devices:", error);
       this.elements.scriptStatus.textContent = `Status: Error: ${
         error instanceof Error ? error.message : "Unknown error"
       }`;
       this.scriptLoaded = false;
-    } finally {
-      this.elements.loadScript.disabled = false;
-      this.updateButtonStates();
+      throw error;
     }
   }
 
@@ -401,8 +493,7 @@ class IVEConnectTestApp {
       const playbackRate = 1.0; // Default playback rate
       const loop = false; // Default loop setting
 
-      this.elements.scriptStatus.textContent =
-        "Status: Starting playback......";
+      this.elements.scriptStatus.textContent = "Status: Starting playback...";
       this.elements.playScript.disabled = true;
 
       // Play script on all connected devices
@@ -513,6 +604,7 @@ class IVEConnectTestApp {
 
     // Playback buttons
     this.elements.loadScript.disabled = !anyDeviceConnected;
+    this.elements.uploadScript.disabled = !anyDeviceConnected;
     this.elements.playScript.disabled =
       !this.scriptLoaded || !anyDeviceConnected;
     this.elements.stopScript.disabled = !anyDeviceConnected;

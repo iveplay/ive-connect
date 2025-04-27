@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "parcel ./src/index.html --watch-dir ./src --watch-dir ../src --open"
+    "dev": "parcel ./src/index.html --watch-dir ../../  --watch-ignore ['.git','dist','node_modules'] --open"
   },
   "dependencies": {
     "buttplug": "^3.2.2",

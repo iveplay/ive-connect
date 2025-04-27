@@ -59,7 +59,22 @@
             placeholder="Enter funscript URL"
             value="https://eroscripts-discourse.eroscripts.com/original/3X/b/d/bd95dd1ab1fc5e275291905eed8893fe53343a35.funscript"
           />
-          <button id="loadScript" class="secondary">Load Script</button>
+          <button id="loadScript" class="secondary">
+            Load Script from URL
+          </button>
+        </div>
+        <div class="form-group">
+          <label for="scriptFile">Upload Funscript File:</label>
+          <div class="file-input-wrapper">
+            <input
+              type="file"
+              id="scriptFile"
+              accept=".funscript,application/json"
+            />
+            <button id="uploadScript" class="secondary">
+              Load Uploaded Script
+            </button>
+          </div>
         </div>
         <div class="form-group">
           <label for="videoTime">Video Time (ms):</label>
