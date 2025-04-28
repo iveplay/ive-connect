@@ -375,9 +375,9 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       this._isPlaying = true;
 
       // Create an interval to check for actions
-      this._playbackInterval = window.setInterval(() => {
+      this._playbackInterval = setInterval(() => {
         this._processActions(executor);
-      }, 20); // Check every 20ms for smoother playback
+      }, 20) as unknown as number; // Check every 20ms for smoother playback
 
       this.emit("playbackStateChanged", {
         isPlaying: this._isPlaying,
