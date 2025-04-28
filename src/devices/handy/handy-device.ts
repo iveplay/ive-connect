@@ -174,7 +174,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
         this._eventSource = null;
       }
 
-      // Update state
+      // Update state immediately
       this._connectionState = ConnectionState.DISCONNECTED;
       this._deviceInfo = null;
       this._isPlaying = false;
@@ -183,9 +183,20 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       this.emit("connectionStateChanged", this._connectionState);
       this.emit("disconnected");
 
+      // Return true regardless of what happens with the API
       return true;
     } catch (error) {
       console.error("Handy: Error disconnecting device:", error);
+
+      // Set disconnected state even in case of error
+      this._connectionState = ConnectionState.DISCONNECTED;
+      this._deviceInfo = null;
+      this._isPlaying = false;
+
+      // Emit events
+      this.emit("connectionStateChanged", this._connectionState);
+      this.emit("disconnected");
+
       return true; // Return true anyway for better UX
     }
   }
