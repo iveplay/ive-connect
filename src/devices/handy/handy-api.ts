@@ -205,7 +205,7 @@ export class HandyApi {
       const response = await this.request<HspState>("/hssp/play", {
         method: "PUT",
         body: JSON.stringify({
-          start_time: Math.round(videoTime * 1000),
+          start_time: Math.round(videoTime),
           server_time: this.estimateServerTime(),
           playback_rate: playbackRate,
           loop,
@@ -244,7 +244,7 @@ export class HandyApi {
       const response = await this.request<HspState>("/hssp/synctime", {
         method: "PUT",
         body: JSON.stringify({
-          current_time: Math.round(videoTime * 1000),
+          current_time: Math.round(videoTime),
           server_time: this.estimateServerTime(),
           filter,
         }),

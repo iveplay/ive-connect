@@ -489,7 +489,7 @@ class IVEConnectTestApp {
     }
 
     try {
-      const timeMs = Number(this.elements.videoTime.value) || 0;
+      const timeMs = (Number(this.elements.videoTime.value) || 0) * 1000;
       const playbackRate = 1.0; // Default playback rate
       const loop = false; // Default loop setting
 
@@ -557,7 +557,7 @@ class IVEConnectTestApp {
    */
   private async syncScriptTime(): Promise<void> {
     try {
-      const timeMs = Number(this.elements.videoTime.value) || 0;
+      const timeMs = (Number(this.elements.videoTime.value) || 0) * 1000;
 
       this.elements.syncTime.disabled = true;
 
