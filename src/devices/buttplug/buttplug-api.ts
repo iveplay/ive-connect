@@ -18,7 +18,7 @@ import {
   DevicePreference,
 } from "./types";
 
-const DEBUG_WEBSOCKET = true;
+const DEBUG_WEBSOCKET = false;
 
 export class ButtplugApi extends EventEmitter {
   private client: ButtplugClient | null = null;

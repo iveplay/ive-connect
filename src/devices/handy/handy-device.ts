@@ -265,8 +265,33 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
 
       // Handle script data based on type
       if (scriptData.url) {
-        // If URL is provided, use it directly
-        scriptUrl = scriptData.url;
+        // If URL ends with .funscript and it's a direct URL, fetch and upload it
+        if (scriptData.url.toLowerCase().endsWith(".funscript")) {
+          try {
+            const response = await fetch(scriptData.url);
+            if (!response.ok) {
+              throw new Error(`Failed to fetch funscript: ${response.status}`);
+            }
+
+            const funscriptContent = await response.json();
+            const blob = new Blob([JSON.stringify(funscriptContent)], {
+              type: "application/json",
+            });
+
+            const uploadedUrl = await this._api.uploadScript(blob);
+            if (!uploadedUrl) {
+              throw new Error("Failed to upload funscript");
+            }
+
+            scriptUrl = uploadedUrl;
+          } catch (error) {
+            console.error("Error processing funscript URL:", error);
+            // Fall back to using the original URL
+            scriptUrl = scriptData.url;
+          }
+        } else {
+          scriptUrl = scriptData.url;
+        }
       } else if (scriptData.content) {
         // If content is provided, upload it
         const blob = new Blob([JSON.stringify(scriptData.content)], {
