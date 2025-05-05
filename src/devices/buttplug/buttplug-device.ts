@@ -539,11 +539,11 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
           ? this._currentScriptActions[actionIndex - 1]
           : { pos: 0 };
 
-      // Calculate duration for linear movement based on time to next action
+      // Calculate duration for linear movement based on time with previous action
       let durationMs = 500; // Default duration if we can't determine
       if (actionIndex < this._currentScriptActions.length - 1) {
-        const nextAction = this._currentScriptActions[actionIndex + 1];
-        durationMs = nextAction.at - action.at;
+        const prevAction = this._currentScriptActions[actionIndex - 1];
+        durationMs = action.at - prevAction.at;
 
         // Enforce a minimum duration to prevent erratic movement
         durationMs = Math.max(100, durationMs);
@@ -596,7 +596,12 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       }
     }
 
-    return bestIndex;
+    // When returning bestIndex, we're always getting
+    // the last action that has a timestamp <= timeMs
+    // Let's return the next action instead
+    return bestIndex < this._currentScriptActions.length - 1
+      ? bestIndex + 1
+      : bestIndex;
   }
 
   /**
