@@ -21,6 +21,7 @@ import {
 } from "./types";
 import { generateClientName, isWebBluetoothSupported } from "./buttplug-server";
 import { createMultiDeviceCommandExecutor } from "./command-helpers";
+import { parseCSVToFunscript } from "../../utils/parseCSVToFunscript";
 
 /**
  * Default Buttplug configuration
@@ -269,11 +270,42 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
               `Failed to fetch script: ${response.status} ${response.statusText}`
             );
           }
-          scriptContent = await response.json();
-          console.log(
-            `[BUTTPLUG-SCRIPT] Script loaded successfully, actions:`,
-            scriptContent.actions?.length
-          );
+
+          // Determine if it's a CSV or JSON (funscript) based on file extension
+          const fileExtension = scriptData.url.toLowerCase().split(".").pop();
+
+          if (fileExtension === "csv") {
+            // Handle CSV file
+            const csvText = await response.text();
+            scriptContent = parseCSVToFunscript(csvText);
+            console.log(
+              `[BUTTPLUG-SCRIPT] CSV loaded and converted to funscript format, actions:`,
+              scriptContent.actions?.length
+            );
+          } else {
+            // Handle JSON file (funscript)
+            try {
+              scriptContent = await response.json();
+              console.log(
+                `[BUTTPLUG-SCRIPT] Script loaded successfully, actions:`,
+                scriptContent.actions?.length
+              );
+            } catch (parseError) {
+              // If JSON parsing fails, try as CSV
+              const text = await response.text();
+              try {
+                // First try to parse as JSON again with some cleanup
+                scriptContent = JSON.parse(text.trim());
+              } catch {
+                // If that fails, try CSV parsing
+                scriptContent = parseCSVToFunscript(text);
+              }
+              console.log(
+                `[BUTTPLUG-SCRIPT] File loaded and parsed as CSV, actions:`,
+                scriptContent.actions?.length
+              );
+            }
+          }
         } catch (error) {
           this.emit(
             "error",
@@ -517,7 +549,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
     // If we reached the end of the script
     if (
       actionIndex === this._currentScriptActions.length - 1 &&
-      elapsedMs > this._currentScriptActions[actionIndex].at + 1000
+      elapsedMs > this._currentScriptActions[actionIndex]?.at + 1000
     ) {
       if (this._loopPlayback) {
         // Reset for loop playback
@@ -543,7 +575,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       let durationMs = 500; // Default duration if we can't determine
       if (actionIndex < this._currentScriptActions.length - 1) {
         const prevAction = this._currentScriptActions[actionIndex - 1];
-        durationMs = action.at - prevAction.at;
+        durationMs = action?.at - prevAction?.at;
 
         // Enforce a minimum duration to prevent erratic movement
         durationMs = Math.max(100, durationMs);
