@@ -266,7 +266,10 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       // Handle script data based on type
       if (scriptData.url) {
         // If URL ends with .funscript and it's a direct URL, fetch and upload it
-        if (scriptData.url.toLowerCase().endsWith(".funscript")) {
+        if (
+          scriptData.url.toLowerCase().endsWith(".funscript") ||
+          scriptData.type === "funscript"
+        ) {
           try {
             const response = await fetch(scriptData.url);
             if (!response.ok) {
