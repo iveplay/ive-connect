@@ -105,24 +105,36 @@ export class DeviceManager extends EventEmitter {
    */
   async loadScriptAll(
     scriptData: ScriptData
-  ): Promise<Record<string, boolean>> {
-    const results: Record<string, boolean> = {};
+  ): Promise<Record<string, boolean | ScriptData>> {
+    const results: Record<
+      string,
+      { success: boolean; scriptContent?: ScriptData }
+    > = {};
     this.scriptData = scriptData;
 
     for (const [id, device] of this.devices.entries()) {
-      if (device.isConnected) {
+      if (device.isConnected || device.id === "buttplug") {
         try {
           results[id] = await device.loadScript(scriptData);
         } catch (error) {
           console.error(`Error loading script to device ${id}:`, error);
-          results[id] = false;
+          results[id] = { success: false };
         }
       } else {
-        results[id] = false;
+        results[id] = { success: false };
       }
     }
 
-    return results;
+    const transformedResults: Record<string, boolean | ScriptData> = {};
+
+    for (const [id, result] of Object.entries(results)) {
+      if (result.scriptContent) {
+        transformedResults["script"] = result.scriptContent;
+      }
+      transformedResults[id] = result.success;
+    }
+
+    return transformedResults;
   }
 
   /**

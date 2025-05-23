@@ -254,10 +254,10 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    * Load a script for playback
    * @param scriptData Script data to load
    */
-  async loadScript(scriptData: ScriptData): Promise<boolean> {
+  async loadScript(scriptData: ScriptData): Promise<{ success: boolean }> {
     if (!this.isConnected) {
       this.emit("error", "Cannot load script: Device not connected");
-      return false;
+      return { success: false };
     }
 
     try {
@@ -304,7 +304,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
         const uploadedUrl = await this._api.uploadScript(blob);
         if (!uploadedUrl) {
           this.emit("error", "Failed to upload script");
-          return false;
+          return { success: false };
         }
 
         scriptUrl = uploadedUrl;
@@ -313,7 +313,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
           "error",
           "Invalid script data: Either URL or content must be provided"
         );
-        return false;
+        return { success: false };
       }
 
       // Set up the script with the device
@@ -321,10 +321,10 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
 
       if (success) {
         this.emit("scriptLoaded", { url: scriptUrl });
-        return true;
+        return { success: true };
       } else {
         this.emit("error", "Failed to set up script with device");
-        return false;
+        return { success: false };
       }
     } catch (error) {
       console.error("Handy: Error loading script:", error);
@@ -334,7 +334,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
           error instanceof Error ? error.message : String(error)
         }`
       );
-      return false;
+      return { success: false };
     }
   }
 

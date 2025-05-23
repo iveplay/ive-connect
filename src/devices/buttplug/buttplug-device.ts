@@ -245,16 +245,13 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
   /**
    * Load a script for playback
    */
-  async loadScript(scriptData: ScriptData): Promise<boolean> {
-    if (!this.isConnected) {
-      this.emit("error", "Cannot load script: Not connected to a server");
-      return false;
-    }
+  async loadScript(
+    scriptData: ScriptData
+  ): Promise<{ success: boolean; scriptContent?: any }> {
+    // Parse script data
+    let scriptContent: any;
 
     try {
-      // Parse script data
-      let scriptContent: any;
-
       if (scriptData.content) {
         // If content is directly provided
         scriptContent = scriptData.content;
@@ -313,14 +310,19 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
               error instanceof Error ? error.message : String(error)
             }`
           );
-          return false;
+          return { success: false };
         }
       } else {
         this.emit(
           "error",
           "Invalid script data: Either URL or content must be provided"
         );
-        return false;
+        return { success: false };
+      }
+
+      if (!this.isConnected) {
+        this.emit("error", "Cannot load script: Not connected to a server");
+        return { success: false, scriptContent };
       }
 
       // Validate script format (basic checks for funscript)
@@ -334,7 +336,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
           "[BUTTPLUG-SCRIPT] Invalid script format:",
           scriptContent
         );
-        return false;
+        return { success: false, scriptContent };
       }
 
       // Sort actions by timestamp
@@ -351,7 +353,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
         actions: this._currentScriptActions.length,
       });
 
-      return true;
+      return { success: true, scriptContent };
     } catch (error) {
       console.error("Buttplug: Error loading script:", error);
       this.emit(
@@ -360,7 +362,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
           error instanceof Error ? error.message : String(error)
         }`
       );
-      return false;
+      return { success: false };
     }
   }
 

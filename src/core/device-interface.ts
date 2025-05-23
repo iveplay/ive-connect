@@ -97,7 +97,9 @@ export interface HapticDevice {
    * Load a script for playback
    * @param scriptData Script data to load
    */
-  loadScript(scriptData: ScriptData): Promise<boolean>;
+  loadScript(
+    scriptData: ScriptData
+  ): Promise<{ success: boolean; scriptContent?: ScriptData }>;
 
   /**
    * Play the loaded script at the specified time
