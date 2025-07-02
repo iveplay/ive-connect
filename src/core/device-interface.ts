@@ -117,8 +117,9 @@ export interface HapticDevice {
   /**
    * Synchronize device time with provided time
    * @param timeMs Current time in milliseconds
+   * @param filter Time filter for synchronization
    */
-  syncTime(timeMs: number): Promise<boolean>;
+  syncTime(timeMs: number, filter?: number): Promise<boolean>;
 
   /**
    * Get device-specific information

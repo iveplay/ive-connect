@@ -118,7 +118,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       this.emit("connectionStateChanged", this._connectionState);
 
       // Synchronize time
-      await this._api.syncTime();
+      await this._api.syncServerTime();
 
       // Create event source for server-sent events
       this._eventSource = this._api.createEventSource();
@@ -429,13 +429,13 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    * Synchronize device time with provided time
    * @param timeMs Current time in milliseconds
    */
-  async syncTime(timeMs: number): Promise<boolean> {
+  async syncTime(timeMs: number, filter: number = 0.5): Promise<boolean> {
     if (!this.isConnected || !this._isPlaying) {
       return false;
     }
 
     try {
-      return await this._api.syncVideoTime(timeMs);
+      return await this._api.syncVideoTime(timeMs, filter);
     } catch (error) {
       console.error("Handy: Error syncing time:", error);
       return false;

@@ -193,15 +193,19 @@ export class DeviceManager extends EventEmitter {
   /**
    * Synchronize time on all connected and playing devices
    * @param timeMs Current time in milliseconds
+   * @param filter Time filter for synchronization
    * @returns Object with success status for each device
    */
-  async syncTimeAll(timeMs: number): Promise<Record<string, boolean>> {
+  async syncTimeAll(
+    timeMs: number,
+    filter: number = 0.5
+  ): Promise<Record<string, boolean>> {
     const results: Record<string, boolean> = {};
 
     for (const [id, device] of this.devices.entries()) {
       if (device.isConnected && device.isPlaying) {
         try {
-          results[id] = await device.syncTime(timeMs);
+          results[id] = await device.syncTime(timeMs, filter);
         } catch (error) {
           console.error(`Error syncing time on device ${id}:`, error);
           results[id] = false;

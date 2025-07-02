@@ -335,7 +335,7 @@ export class HandyApi {
    * Synchronize time with the server
    * Returns calculated server time offset
    */
-  public async syncTime(sampleCount = 10): Promise<number> {
+  public async syncServerTime(sampleCount = 10): Promise<number> {
     try {
       const samples: { rtd: number; offset: number }[] = [];
 

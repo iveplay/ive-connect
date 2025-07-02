@@ -107,3 +107,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 This project uses [buttplug.io](https://buttplug.io) (BSD 3-Clause License) for device communication.
+[Funscript Player](https://funscriptplayer.com/) was a great example of buttplug.io integration.
