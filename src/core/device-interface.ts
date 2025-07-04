@@ -54,6 +54,13 @@ export interface ScriptData {
 }
 
 /**
+ * Script options interface
+ */
+export type ScriptOptions = {
+  invertScript?: boolean; // Whether to invert script values
+};
+
+/**
  * Common interface for all haptic devices
  */
 export interface HapticDevice {
@@ -98,7 +105,8 @@ export interface HapticDevice {
    * @param scriptData Script data to load
    */
   loadScript(
-    scriptData: ScriptData
+    scriptData: ScriptData,
+    options?: ScriptOptions
   ): Promise<{ success: boolean; scriptContent?: ScriptData }>;
 
   /**

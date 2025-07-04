@@ -18,7 +18,7 @@ export function convertScriptPositionToDevicePosition(
   // Normalize scriptPos to 0.0-1.0 range
   let normalized = Math.min(1, Math.max(0, scriptPos / 100));
 
-  // Apply inversion if needed
+  // Apply script inversion first if enabled
   if (invert) {
     normalized = 1.0 - normalized;
   }
@@ -33,7 +33,8 @@ export function convertScriptPositionToDevicePosition(
 export function createDeviceCommandExecutor(
   api: ButtplugApi,
   deviceInfo: ButtplugDeviceInfo,
-  preferences: DevicePreference
+  preferences: DevicePreference,
+  invertScript: boolean = false
 ): {
   executeAction: (
     pos: number,
@@ -61,7 +62,7 @@ export function createDeviceCommandExecutor(
           pos,
           0, // Min
           1, // Max
-          false // Not inverted
+          invertScript
         );
 
         // Apply device-specific intensity scaling if configured
@@ -92,11 +93,18 @@ export function createDeviceCommandExecutor(
         }
 
         if (deviceInfo.canVibrate && preferences.useVibrate) {
-          await api.vibrateDevice(deviceInfo.index, speed);
+          await api.vibrateDevice(
+            deviceInfo.index,
+            invertScript ? 1 - speed : speed
+          );
         }
 
         if (deviceInfo.canRotate && preferences.useRotate) {
-          await api.rotateDevice(deviceInfo.index, speed, true);
+          await api.rotateDevice(
+            deviceInfo.index,
+            speed,
+            invertScript ? false : true
+          );
         }
       } catch (error) {
         console.error(
@@ -114,7 +122,8 @@ export function createDeviceCommandExecutor(
 export function createMultiDeviceCommandExecutor(
   api: ButtplugApi,
   devices: ButtplugDeviceInfo[],
-  preferences: Map<number, DevicePreference>
+  preferences: Map<number, DevicePreference>,
+  invertScript: boolean = false
 ): {
   executeAction: (
     pos: number,
@@ -130,7 +139,12 @@ export function createMultiDeviceCommandExecutor(
     })
     .map((device) => {
       const devicePrefs = preferences.get(device.index);
-      return createDeviceCommandExecutor(api, device, devicePrefs!);
+      return createDeviceCommandExecutor(
+        api,
+        device,
+        devicePrefs!,
+        invertScript
+      );
     });
 
   // Create a combined executor that will send commands to all devices

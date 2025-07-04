@@ -7,6 +7,7 @@ import {
   DeviceInfo,
   HapticDevice,
   ScriptData,
+  ScriptOptions,
 } from "../../core/device-interface";
 import { EventEmitter } from "../../core/events";
 import { HandyApi, createHandyApi } from "./handy-api";
@@ -254,18 +255,20 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    * Load a script for playback
    * @param scriptData Script data to load
    */
-  async loadScript(scriptData: ScriptData): Promise<{ success: boolean }> {
+  async loadScript(
+    scriptData: ScriptData,
+    options: ScriptOptions = { invertScript: false }
+  ): Promise<{ success: boolean }> {
     if (!this.isConnected) {
       this.emit("error", "Cannot load script: Device not connected");
       return { success: false };
     }
 
     try {
+      let scriptContent: any;
       let scriptUrl: string;
 
-      // Handle script data based on type
       if (scriptData.url) {
-        // If URL ends with .funscript and it's a direct URL, fetch and upload it
         if (
           scriptData.url.toLowerCase().endsWith(".funscript") ||
           scriptData.type === "funscript"
@@ -276,8 +279,18 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
               throw new Error(`Failed to fetch funscript: ${response.status}`);
             }
 
-            const funscriptContent = await response.json();
-            const blob = new Blob([JSON.stringify(funscriptContent)], {
+            scriptContent = await response.json();
+
+            if (options.invertScript && scriptContent.actions) {
+              scriptContent.actions = scriptContent.actions.map(
+                (action: any) => ({
+                  ...action,
+                  pos: 100 - action.pos,
+                })
+              );
+            }
+
+            const blob = new Blob([JSON.stringify(scriptContent)], {
               type: "application/json",
             });
 
@@ -289,15 +302,73 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
             scriptUrl = uploadedUrl;
           } catch (error) {
             console.error("Error processing funscript URL:", error);
-            // Fall back to using the original URL
             scriptUrl = scriptData.url;
           }
         } else {
-          scriptUrl = scriptData.url;
+          try {
+            const response = await fetch(scriptData.url);
+            if (!response.ok) {
+              throw new Error(`Failed to fetch script: ${response.status}`);
+            }
+
+            const fileExtension = scriptData.url.toLowerCase().split(".").pop();
+
+            if (fileExtension === "csv") {
+              let csvText = await response.text();
+
+              // Apply inversion directly to CSV data
+              if (options.invertScript) {
+                const lines = csvText.split("\n");
+                const hasHeader = isNaN(parseFloat(lines[0].split(",")[0]));
+                const startIndex = hasHeader ? 1 : 0;
+
+                for (let i = startIndex; i < lines.length; i++) {
+                  const line = lines[i].trim();
+                  if (!line) continue;
+
+                  const columns = line.split(",");
+                  if (columns.length >= 2) {
+                    const pos = parseFloat(columns[1].trim());
+                    if (!isNaN(pos)) {
+                      columns[1] = (100 - pos).toString();
+                      lines[i] = columns.join(",");
+                    }
+                  }
+                }
+
+                csvText = lines.join("\n");
+              }
+
+              const blob = new Blob([csvText], {
+                type: "text/csv",
+              });
+
+              const uploadedUrl = await this._api.uploadScript(blob);
+              if (!uploadedUrl) {
+                throw new Error("Failed to upload CSV script");
+              }
+
+              scriptUrl = uploadedUrl;
+            } else {
+              // For other file types, use URL directly
+              scriptUrl = scriptData.url;
+            }
+          } catch (error) {
+            console.error("Error processing script URL:", error);
+            scriptUrl = scriptData.url;
+          }
         }
       } else if (scriptData.content) {
-        // If content is provided, upload it
-        const blob = new Blob([JSON.stringify(scriptData.content)], {
+        scriptContent = { ...scriptData.content };
+
+        if (options.invertScript && scriptContent.actions) {
+          scriptContent.actions = scriptContent.actions.map((action: any) => ({
+            ...action,
+            pos: 100 - action.pos,
+          }));
+        }
+
+        const blob = new Blob([JSON.stringify(scriptContent)], {
           type: "application/json",
         });
 
@@ -316,11 +387,13 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
         return { success: false };
       }
 
-      // Set up the script with the device
       const success = await this._api.setupScript(scriptUrl);
 
       if (success) {
-        this.emit("scriptLoaded", { url: scriptUrl });
+        this.emit("scriptLoaded", {
+          url: scriptUrl,
+          options,
+        });
         return { success: true };
       } else {
         this.emit("error", "Failed to set up script with device");
@@ -360,9 +433,6 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       if (hspState) {
         this._isPlaying =
           hspState.play_state === 1 || hspState.play_state === "1";
-
-        // Sync immediately to ensure accurate timing
-        await this._api.syncVideoTime(timeMs);
 
         this.emit("playbackStateChanged", {
           isPlaying: this._isPlaying,

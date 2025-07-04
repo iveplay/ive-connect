@@ -9,6 +9,7 @@ import {
   DeviceInfo,
   HapticDevice,
   ScriptData,
+  ScriptOptions,
 } from "../../core/device-interface";
 import { EventEmitter } from "../../core/events";
 import { ButtplugApi } from "./buttplug-api";
@@ -246,7 +247,8 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
    * Load a script for playback
    */
   async loadScript(
-    scriptData: ScriptData
+    scriptData: ScriptData,
+    options: ScriptOptions = { invertScript: false }
   ): Promise<{ success: boolean; scriptContent?: any }> {
     // Parse script data
     let scriptContent: any;
@@ -339,8 +341,18 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
         return { success: false, scriptContent };
       }
 
+      // Apply inversion to script actions if needed
+      let actions = [...scriptContent.actions];
+      if (options.invertScript) {
+        console.log("[BUTTPLUG-SCRIPT] Applying inversion to script");
+        actions = actions.map((action) => ({
+          ...action,
+          pos: 100 - action.pos,
+        }));
+      }
+
       // Sort actions by timestamp
-      const actions = [...scriptContent.actions].sort((a, b) => a.at - b.at);
+      actions.sort((a, b) => a.at - b.at);
 
       // Store the script and actions
       this._loadedScript = scriptContent;
@@ -402,7 +414,8 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       const executor = createMultiDeviceCommandExecutor(
         this._api,
         devices,
-        preferences
+        preferences,
+        false
       );
 
       // Start playback

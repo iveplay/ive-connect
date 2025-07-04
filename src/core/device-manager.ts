@@ -4,7 +4,7 @@
  * Central manager for all haptic devices
  */
 import { EventEmitter } from "./events";
-import { HapticDevice, ScriptData } from "./device-interface";
+import { HapticDevice, ScriptData, ScriptOptions } from "./device-interface";
 
 /**
  * Device Manager class
@@ -101,10 +101,12 @@ export class DeviceManager extends EventEmitter {
   /**
    * Load a script to all connected devices
    * @param scriptData Script data to load
+   * @param options Options for script loading (e.g., invertScript)
    * @returns Object with success status for each device
    */
   async loadScriptAll(
-    scriptData: ScriptData
+    scriptData: ScriptData,
+    options?: ScriptOptions
   ): Promise<Record<string, boolean | ScriptData>> {
     const results: Record<
       string,
@@ -115,7 +117,7 @@ export class DeviceManager extends EventEmitter {
     for (const [id, device] of this.devices.entries()) {
       if (device.isConnected || device.id === "buttplug") {
         try {
-          results[id] = await device.loadScript(scriptData);
+          results[id] = await device.loadScript(scriptData, options);
         } catch (error) {
           console.error(`Error loading script to device ${id}:`, error);
           results[id] = { success: false };
