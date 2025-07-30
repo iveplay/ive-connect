@@ -34,13 +34,13 @@ export function createDeviceCommandExecutor(
   api: ButtplugApi,
   deviceInfo: ButtplugDeviceInfo,
   preferences: DevicePreference,
-  strokeRange: { min: number; max: number } = { min: 0, max: 1 },
   invertScript: boolean = false
 ): {
   executeAction: (
     pos: number,
     prevPos: number,
-    durationMs: number
+    durationMs: number,
+    strokeRange?: { min: number; max: number }
   ) => Promise<void>;
 } {
   // If device is disabled, return a no-op executor
@@ -56,7 +56,12 @@ export function createDeviceCommandExecutor(
   let lastPos = -1;
 
   return {
-    executeAction: async (pos: number, prevPos: number, durationMs: number) => {
+    executeAction: async (
+      pos: number,
+      prevPos: number,
+      durationMs: number,
+      strokeRange = { min: 0, max: 1 }
+    ) => {
       try {
         // Convert position to device range with stroke range applied
         const position = convertScriptPositionToDevicePosition(
@@ -70,7 +75,7 @@ export function createDeviceCommandExecutor(
         const intensity =
           preferences.intensity !== undefined ? preferences.intensity : 1.0;
 
-        // For vibration and rotation: based on position directly (Martin style)
+        // For vibration and rotation: based on position directly
         // If position hasn't changed from last position, set to 0
         let speed = Math.min(1.0, Math.max(0, pos / 100)) * intensity;
 
@@ -125,13 +130,13 @@ export function createMultiDeviceCommandExecutor(
   api: ButtplugApi,
   devices: ButtplugDeviceInfo[],
   preferences: Map<number, DevicePreference>,
-  strokeRange: { min: number; max: number } = { min: 0, max: 1 },
   invertScript: boolean = false
 ): {
   executeAction: (
     pos: number,
     prevPos: number,
-    durationMs: number
+    durationMs: number,
+    strokeRange?: { min: number; max: number }
   ) => Promise<void>;
 } {
   // Create executors for all enabled devices
@@ -146,18 +151,22 @@ export function createMultiDeviceCommandExecutor(
         api,
         device,
         devicePrefs!,
-        strokeRange,
         invertScript
       );
     });
 
   // Create a combined executor that will send commands to all devices
   return {
-    executeAction: async (pos: number, prevPos: number, durationMs: number) => {
+    executeAction: async (
+      pos: number,
+      prevPos: number,
+      durationMs: number,
+      strokeRange = { min: 0, max: 1 }
+    ) => {
       // Execute on all devices in parallel
       await Promise.all(
         deviceExecutors.map((executor) =>
-          executor.executeAction(pos, prevPos, durationMs)
+          executor.executeAction(pos, prevPos, durationMs, strokeRange)
         )
       );
     },

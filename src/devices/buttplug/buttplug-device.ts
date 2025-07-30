@@ -416,18 +416,13 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       this._loopPlayback = loop;
       this._lastActionIndex = -1;
 
-      // Create command executor for all devices with stroke range
+      // Create command executor for all devices (no stroke range here)
       const devices = this._api.getDevices();
       const preferences = this._api.getDevicePreferences();
-
-      // Get stroke range from config, default to full range
-      const strokeRange = this._config.strokeRange || { min: 0, max: 1 };
-
       const executor = createMultiDeviceCommandExecutor(
         this._api,
         devices,
         preferences,
-        strokeRange,
         false
       );
 
@@ -437,7 +432,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       // Create an interval to check for actions
       this._playbackInterval = setInterval(() => {
         this._processActions(executor);
-      }, 20) as unknown as number; // Check every 20ms for smoother playback
+      }, 20) as unknown as number;
 
       this.emit("playbackStateChanged", {
         isPlaying: this._isPlaying,
@@ -559,7 +554,8 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
     executeAction: (
       pos: number,
       prevPos: number,
-      durationMs: number
+      durationMs: number,
+      strokeRange?: { min: number; max: number }
     ) => Promise<void>;
   }): void {
     if (!this._isPlaying || !this._currentScriptActions.length) {
@@ -609,9 +605,12 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
         durationMs = Math.max(100, durationMs);
       }
 
-      // Execute the action on all devices
+      // Get current stroke range from config (live updates)
+      const strokeRange = this._config.strokeRange || { min: 0, max: 1 };
+
+      // Execute the action on all devices with current stroke range
       executor
-        .executeAction(action.pos, prevAction.pos, durationMs)
+        .executeAction(action.pos, prevAction.pos, durationMs, strokeRange)
         .catch((error) => {
           console.error("Error executing action:", error);
         });
