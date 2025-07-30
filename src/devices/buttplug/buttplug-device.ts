@@ -33,6 +33,7 @@ const DEFAULT_CONFIG: ButtplugSettings = {
   enabled: true,
   connectionType: ButtplugConnectionType.LOCAL,
   clientName: generateClientName(),
+  strokeRange: { min: 0, max: 1 },
   allowedFeatures: {
     vibrate: true,
     rotate: true,
@@ -205,6 +206,13 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
 
     if (config.clientName !== undefined) {
       this._config.clientName = config.clientName;
+    }
+
+    if (config.strokeRange !== undefined) {
+      this._config.strokeRange = {
+        min: config.strokeRange.min,
+        max: config.strokeRange.max,
+      };
     }
 
     if (config.allowedFeatures !== undefined) {
@@ -408,13 +416,18 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       this._loopPlayback = loop;
       this._lastActionIndex = -1;
 
-      // Create command executor for all devices
+      // Create command executor for all devices with stroke range
       const devices = this._api.getDevices();
       const preferences = this._api.getDevicePreferences();
+
+      // Get stroke range from config, default to full range
+      const strokeRange = this._config.strokeRange || { min: 0, max: 1 };
+
       const executor = createMultiDeviceCommandExecutor(
         this._api,
         devices,
         preferences,
+        strokeRange,
         false
       );
 

@@ -25,10 +25,10 @@ export enum ButtplugConnectionState {
  */
 export interface ButtplugSettings extends DeviceSettings {
   connectionType: ButtplugConnectionType;
-  serverUrl?: string; // For WebSocket connections
-  clientName: string; // Client name for Buttplug server
+  serverUrl?: string;
+  clientName: string;
+  strokeRange?: { min: number; max: number };
   allowedFeatures: {
-    // Features to enable
     vibrate: boolean;
     rotate: boolean;
     linear: boolean;
@@ -40,7 +40,7 @@ export interface ButtplugSettings extends DeviceSettings {
       useVibrate: boolean;
       useRotate: boolean;
       useLinear: boolean;
-      intensity?: number; // Custom intensity scaling (0.0 to 1.0)
+      intensity?: number;
     }
   >;
 }

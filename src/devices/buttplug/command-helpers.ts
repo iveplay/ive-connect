@@ -11,8 +11,8 @@ import { ButtplugDeviceInfo, DevicePreference } from "./types";
  */
 export function convertScriptPositionToDevicePosition(
   scriptPos: number,
-  min: number = 0.0,
-  max: number = 1.0,
+  strokeMin: number = 0.0,
+  strokeMax: number = 1.0,
   invert: boolean = false
 ): number {
   // Normalize scriptPos to 0.0-1.0 range
@@ -23,8 +23,8 @@ export function convertScriptPositionToDevicePosition(
     normalized = 1.0 - normalized;
   }
 
-  // Scale to min-max range
-  return min + normalized * (max - min);
+  // Scale to stroke range
+  return strokeMin + normalized * (strokeMax - strokeMin);
 }
 
 /**
@@ -34,6 +34,7 @@ export function createDeviceCommandExecutor(
   api: ButtplugApi,
   deviceInfo: ButtplugDeviceInfo,
   preferences: DevicePreference,
+  strokeRange: { min: number; max: number } = { min: 0, max: 1 },
   invertScript: boolean = false
 ): {
   executeAction: (
@@ -57,11 +58,11 @@ export function createDeviceCommandExecutor(
   return {
     executeAction: async (pos: number, prevPos: number, durationMs: number) => {
       try {
-        // Convert position to device range (0.0-1.0)
+        // Convert position to device range with stroke range applied
         const position = convertScriptPositionToDevicePosition(
           pos,
-          0, // Min
-          1, // Max
+          strokeRange.min,
+          strokeRange.max,
           invertScript
         );
 
@@ -85,6 +86,7 @@ export function createDeviceCommandExecutor(
           speed,
           position,
           durationMs,
+          strokeRange,
         });
 
         // Send appropriate commands based on device capabilities and preferences
@@ -123,6 +125,7 @@ export function createMultiDeviceCommandExecutor(
   api: ButtplugApi,
   devices: ButtplugDeviceInfo[],
   preferences: Map<number, DevicePreference>,
+  strokeRange: { min: number; max: number } = { min: 0, max: 1 },
   invertScript: boolean = false
 ): {
   executeAction: (
@@ -143,6 +146,7 @@ export function createMultiDeviceCommandExecutor(
         api,
         device,
         devicePrefs!,
+        strokeRange,
         invertScript
       );
     });
