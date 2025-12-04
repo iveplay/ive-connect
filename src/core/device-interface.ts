@@ -18,6 +18,7 @@ export enum DeviceCapability {
   VIBRATE = "vibrate",
   ROTATE = "rotate",
   LINEAR = "linear",
+  OSCILLATE = "oscillate",
   STROKE = "stroke", // Specific to linear stroking devices like Handy
 }
 

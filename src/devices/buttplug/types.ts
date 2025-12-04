@@ -32,17 +32,9 @@ export interface ButtplugSettings extends DeviceSettings {
     vibrate: boolean;
     rotate: boolean;
     linear: boolean;
+    oscillate: boolean;
   };
-  devicePreferences: Record<
-    number,
-    {
-      enabled: boolean;
-      useVibrate: boolean;
-      useRotate: boolean;
-      useLinear: boolean;
-      intensity?: number;
-    }
-  >;
+  devicePreferences: Record<number, DevicePreference>;
 }
 
 /**
@@ -54,6 +46,7 @@ export interface ButtplugDeviceInfo {
   canVibrate: boolean; // Supports vibration
   canRotate: boolean; // Supports rotation
   canLinear: boolean; // Supports linear movement
+  canOscillate: boolean; // Supports oscillation
 }
 
 /**
@@ -64,5 +57,6 @@ export interface DevicePreference {
   useVibrate: boolean;
   useRotate: boolean;
   useLinear: boolean;
+  useOscillate: boolean;
   intensity?: number;
 }

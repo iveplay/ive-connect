@@ -214,6 +214,11 @@ export class ButtplugApi extends EventEmitter {
       return false;
     }
 
+    if (!device.vibrateAttributes || device.vibrateAttributes.length === 0) {
+      this.emit("error", `Device ${index} does not support vibrate commands`);
+      return false;
+    }
+
     try {
       await device.vibrate(speed);
       return true;
@@ -239,6 +244,11 @@ export class ButtplugApi extends EventEmitter {
     const device = this.getClientDevice(index);
     if (!device) {
       this.emit("error", `No device with index ${index}`);
+      return false;
+    }
+
+    if (!device.messageAttributes.LinearCmd) {
+      this.emit("error", `Device ${index} does not support linear commands`);
       return false;
     }
 
@@ -270,11 +280,49 @@ export class ButtplugApi extends EventEmitter {
       return false;
     }
 
+    if (!device.messageAttributes.RotateCmd) {
+      this.emit("error", `Device ${index} does not support rotate commands`);
+      return false;
+    }
+
     try {
       await device.rotate(speed, clockwise);
       return true;
     } catch (error) {
       this.handleDeviceCommandError(error, "rotate");
+      return false;
+    }
+  }
+
+  async oscillateDevice(
+    index: number,
+    speed: number,
+    frequency: number
+  ): Promise<boolean> {
+    if (DEBUG_WEBSOCKET)
+      console.log(
+        `[BUTTPLUG-WS] Oscillate device ${index}: speed=${speed}, frequency=${frequency}`
+      );
+
+    const device = this.getClientDevice(index);
+    if (!device) {
+      this.emit("error", `No device with index ${index}`);
+      return false;
+    }
+
+    if (
+      !device.oscillateAttributes ||
+      device.oscillateAttributes.length === 0
+    ) {
+      this.emit("error", `Device ${index} does not support oscillate commands`);
+      return false;
+    }
+
+    try {
+      await device.oscillate(speed);
+      return true;
+    } catch (error) {
+      this.handleDeviceCommandError(error, "oscillate");
       return false;
     }
   }
@@ -425,6 +473,8 @@ export class ButtplugApi extends EventEmitter {
       canVibrate: device.vibrateAttributes.length > 0,
       canLinear: device.messageAttributes.LinearCmd !== undefined,
       canRotate: device.messageAttributes.RotateCmd !== undefined,
+      canOscillate:
+        device.oscillateAttributes && device.oscillateAttributes.length > 0,
     };
 
     this.devices.set(device.index, deviceInfo);
@@ -436,6 +486,7 @@ export class ButtplugApi extends EventEmitter {
         useVibrate: deviceInfo.canVibrate,
         useRotate: deviceInfo.canRotate,
         useLinear: deviceInfo.canLinear,
+        useOscillate: deviceInfo.canOscillate,
       });
     }
 

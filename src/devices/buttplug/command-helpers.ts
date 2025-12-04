@@ -95,23 +95,27 @@ export function createDeviceCommandExecutor(
         });
 
         // Send appropriate commands based on device capabilities and preferences
-        if (deviceInfo.canLinear && preferences.useLinear) {
+        if (preferences.useLinear) {
           await api.linearDevice(deviceInfo.index, position, durationMs);
         }
 
-        if (deviceInfo.canVibrate && preferences.useVibrate) {
+        if (preferences.useVibrate) {
           await api.vibrateDevice(
             deviceInfo.index,
             invertScript ? 1 - speed : speed
           );
         }
 
-        if (deviceInfo.canRotate && preferences.useRotate) {
+        if (preferences.useRotate) {
           await api.rotateDevice(
             deviceInfo.index,
             speed,
             invertScript ? false : true
           );
+        }
+
+        if (preferences.useOscillate) {
+          await api.oscillateDevice(deviceInfo.index, speed, durationMs);
         }
       } catch (error) {
         console.error(

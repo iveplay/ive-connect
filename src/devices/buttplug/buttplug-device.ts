@@ -38,6 +38,7 @@ const DEFAULT_CONFIG: ButtplugSettings = {
     vibrate: true,
     rotate: true,
     linear: true,
+    oscillate: true,
   },
   devicePreferences: {},
 };
@@ -65,6 +66,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
     DeviceCapability.VIBRATE,
     DeviceCapability.ROTATE,
     DeviceCapability.LINEAR,
+    DeviceCapability.OSCILLATE,
   ];
 
   constructor(config?: Partial<ButtplugSettings>) {
@@ -542,6 +544,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
           device.canVibrate ? "vibrate" : null,
           device.canRotate ? "rotate" : null,
           device.canLinear ? "linear" : null,
+          device.canOscillate ? "oscillate" : null,
         ].filter(Boolean) as string[],
       })),
     };
