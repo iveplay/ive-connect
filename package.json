@@ -28,6 +28,7 @@
     "LICENSE"
   ],
   "dependencies": {
+    "@xsense/autoblow-sdk": "^2.0.1",
     "buttplug": "^3.2.2",
     "buttplug-wasm": "^2.0.1"
   },
