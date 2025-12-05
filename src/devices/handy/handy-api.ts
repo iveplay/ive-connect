@@ -1,16 +1,18 @@
 /**
  * Handy API Implementation
  *
- * Based on the official Handy API
+ * Based on the official Handy API v3
  */
 import {
   HandyDeviceInfo,
   HandyTimeInfo,
   HspState,
+  HspPoint,
+  HspAddRequest,
+  HspPlayRequest,
   ApiResponse,
   OffsetResponse,
   StrokeSettings,
-  UploadResponse,
 } from "./types";
 
 export class HandyApi {
@@ -177,6 +179,10 @@ export class HandyApi {
     }
   }
 
+  // ============================================
+  // HSSP (Handy Synchronized Script Protocol)
+  // ============================================
+
   /**
    * Setup script for HSSP playback
    */
@@ -219,7 +225,7 @@ export class HandyApi {
   }
 
   /**
-   * Stop playback
+   * Stop HSSP playback
    */
   public async stop(): Promise<HspState | null> {
     try {
@@ -234,7 +240,7 @@ export class HandyApi {
   }
 
   /**
-   * Synchronize the device's time with video time
+   * Synchronize the device's time with video time (HSSP)
    */
   public async syncVideoTime(
     videoTime: number,
@@ -255,6 +261,282 @@ export class HandyApi {
       return false;
     }
   }
+
+  // ============================================
+  // HSP (Handy Streaming Protocol)
+  // ============================================
+
+  /**
+   * Setup a new HSP session on the device.
+   * This clears any existing HSP session state.
+   * @param streamId Optional session identifier. If not provided, one will be generated.
+   */
+  public async hspSetup(streamId?: number): Promise<HspState | null> {
+    try {
+      const body = streamId ? { stream_id: streamId } : {};
+      const response = await this.request<HspState>("/hsp/setup", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error setting up HSP:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the current HSP state
+   */
+  public async hspGetState(): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/state");
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error getting HSP state:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Add points to the HSP buffer.
+   * You can add up to 100 points in a single command.
+   * @param points Array of points to add (max 100)
+   * @param tailPointStreamIndex The index of the last point relative to the overall stream
+   * @param flush If true, clears buffer before adding new points
+   * @param tailPointThreshold Optional threshold for starving notifications
+   */
+  public async hspAddPoints(
+    points: HspPoint[],
+    tailPointStreamIndex: number,
+    flush: boolean = false,
+    tailPointThreshold?: number
+  ): Promise<HspState | null> {
+    try {
+      const body: HspAddRequest = {
+        points,
+        tail_point_stream_index: tailPointStreamIndex,
+        flush,
+      };
+
+      if (tailPointThreshold !== undefined) {
+        body.tail_point_threshold = tailPointThreshold;
+      }
+
+      const response = await this.request<HspState>("/hsp/add", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error adding HSP points:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Start HSP playback
+   * @param startTime The start time in milliseconds
+   * @param options Optional playback options
+   */
+  public async hspPlay(
+    startTime: number,
+    options: {
+      serverTime?: number;
+      playbackRate?: number;
+      pauseOnStarving?: boolean;
+      loop?: boolean;
+      addPoints?: HspAddRequest;
+    } = {}
+  ): Promise<HspState | null> {
+    try {
+      const body: HspPlayRequest = {
+        start_time: Math.round(startTime),
+        server_time: options.serverTime ?? this.estimateServerTime(),
+      };
+
+      if (options.playbackRate !== undefined) {
+        body.playback_rate = options.playbackRate;
+      }
+      if (options.pauseOnStarving !== undefined) {
+        body.pause_on_starving = options.pauseOnStarving;
+      }
+      if (options.loop !== undefined) {
+        body.loop = options.loop;
+      }
+      if (options.addPoints) {
+        body.add = options.addPoints;
+      }
+
+      const response = await this.request<HspState>("/hsp/play", {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error starting HSP playback:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Stop HSP playback
+   */
+  public async hspStop(): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/stop", {
+        method: "PUT",
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error stopping HSP:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Pause HSP playback
+   */
+  public async hspPause(): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/pause", {
+        method: "PUT",
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error pausing HSP:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Resume HSP playback
+   * @param pickUp If true, resumes from current 'live' position. If false, resumes from paused position.
+   */
+  public async hspResume(pickUp: boolean = false): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/resume", {
+        method: "PUT",
+        body: JSON.stringify({ pick_up: pickUp }),
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error resuming HSP:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Flush the HSP buffer (remove all points)
+   */
+  public async hspFlush(): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/flush", {
+        method: "PUT",
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error flushing HSP buffer:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Set the HSP loop flag
+   */
+  public async hspSetLoop(loop: boolean): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/loop", {
+        method: "PUT",
+        body: JSON.stringify({ loop }),
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error setting HSP loop:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Set the HSP playback rate
+   */
+  public async hspSetPlaybackRate(
+    playbackRate: number
+  ): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/playbackrate", {
+        method: "PUT",
+        body: JSON.stringify({ playback_rate: playbackRate }),
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error setting HSP playback rate:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Set the HSP tail point stream index threshold
+   */
+  public async hspSetThreshold(threshold: number): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/threshold", {
+        method: "PUT",
+        body: JSON.stringify({ tail_point_threshold: threshold }),
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error setting HSP threshold:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Set the HSP pause-on-starving flag
+   */
+  public async hspSetPauseOnStarving(
+    pauseOnStarving: boolean
+  ): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/pause/onstarving", {
+        method: "PUT",
+        body: JSON.stringify({ pause_on_starving: pauseOnStarving }),
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error setting HSP pause on starving:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Sync HSP time with external source
+   * @param currentTime Current time from external source
+   * @param filter Filter value for gradual adjustment (0-1)
+   */
+  public async hspSyncTime(
+    currentTime: number,
+    filter: number = 0.5
+  ): Promise<HspState | null> {
+    try {
+      const response = await this.request<HspState>("/hsp/synctime", {
+        method: "PUT",
+        body: JSON.stringify({
+          current_time: Math.round(currentTime),
+          server_time: this.estimateServerTime(),
+          filter,
+        }),
+      });
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error syncing HSP time:", error);
+      return null;
+    }
+  }
+
+  // ============================================
+  // HSTP (Handy Simple Timing Protocol)
+  // ============================================
 
   /**
    * Get the current time offset
@@ -284,6 +566,40 @@ export class HandyApi {
       return false;
     }
   }
+
+  /**
+   * Get device time info
+   */
+  public async getDeviceTimeInfo(): Promise<HandyTimeInfo | null> {
+    try {
+      const response = await this.request<HandyTimeInfo>("/hstp/info");
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error getting device time info:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Trigger a server-device clock synchronization
+   */
+  public async clockSync(
+    synchronous: boolean = true
+  ): Promise<HandyTimeInfo | null> {
+    try {
+      const response = await this.request<HandyTimeInfo>(
+        `/hstp/clocksync?s=${synchronous}`
+      );
+      return response.result || null;
+    } catch (error) {
+      console.error("Handy: Error triggering clock sync:", error);
+      return null;
+    }
+  }
+
+  // ============================================
+  // Slider Settings
+  // ============================================
 
   /**
    * Get the current stroke settings
@@ -316,6 +632,10 @@ export class HandyApi {
       return null;
     }
   }
+
+  // ============================================
+  // Server Time Sync
+  // ============================================
 
   /**
    * Get the server time for synchronization calculations
@@ -384,6 +704,10 @@ export class HandyApi {
       return this.serverTimeOffset;
     }
   }
+
+  // ============================================
+  // SSE (Server-Sent Events)
+  // ============================================
 
   /**
    * Create an EventSource for server-sent events

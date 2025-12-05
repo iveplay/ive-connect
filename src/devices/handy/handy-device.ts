@@ -11,7 +11,13 @@ import {
 } from "../../core/device-interface";
 import { EventEmitter } from "../../core/events";
 import { HandyApi, createHandyApi } from "./handy-api";
-import { HandyDeviceInfo, HandySettings, HspState } from "./types";
+import {
+  HandyDeviceInfo,
+  HandySettings,
+  HspState,
+  HspPoint,
+  HspPlayState,
+} from "./types";
 
 /**
  * Default Handy configuration
@@ -49,6 +55,10 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   private _isPlaying: boolean = false;
   private _eventSource: EventSource | null = null;
 
+  // HSP state tracking
+  private _hspState: HspState | null = null;
+  private _hspStreamIndex: number = 0;
+
   readonly id: string = "handy";
   readonly name: string = "Handy";
   readonly type: string = "handy";
@@ -81,6 +91,13 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   }
 
   /**
+   * Get the API instance for direct access
+   */
+  get api(): HandyApi {
+    return this._api;
+  }
+
+  /**
    * Get device connection state
    */
   get isConnected(): boolean {
@@ -92,6 +109,13 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   get isPlaying(): boolean {
     return this._isPlaying;
+  }
+
+  /**
+   * Get current HSP state
+   */
+  get hspState(): HspState | null {
+    return this._hspState;
   }
 
   /**
@@ -179,12 +203,12 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       this._connectionState = ConnectionState.DISCONNECTED;
       this._deviceInfo = null;
       this._isPlaying = false;
+      this._hspState = null;
 
       // Emit events
       this.emit("connectionStateChanged", this._connectionState);
       this.emit("disconnected");
 
-      // Return true regardless of what happens with the API
       return true;
     } catch (error) {
       console.error("Handy: Error disconnecting device:", error);
@@ -198,7 +222,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       this.emit("connectionStateChanged", this._connectionState);
       this.emit("disconnected");
 
-      return true; // Return true anyway for better UX
+      return true;
     }
   }
 
@@ -252,7 +276,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   }
 
   /**
-   * Load a script for playback
+   * Load a script for playback (HSSP)
    * @param scriptData Script data to load
    */
   async loadScript(
@@ -316,7 +340,6 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
             if (fileExtension === "csv") {
               let csvText = await response.text();
 
-              // Apply inversion directly to CSV data
               if (options.invertScript) {
                 const lines = csvText.split("\n");
                 const hasHeader = isNaN(parseFloat(lines[0].split(",")[0]));
@@ -350,7 +373,6 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
 
               scriptUrl = uploadedUrl;
             } else {
-              // For other file types, use URL directly
               scriptUrl = scriptData.url;
             }
           } catch (error) {
@@ -412,7 +434,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   }
 
   /**
-   * Play the loaded script at the specified time
+   * Play the loaded script at the specified time (HSSP)
    * @param timeMs Current time in milliseconds
    * @param playbackRate Playback rate (1.0 = normal speed)
    * @param loop Whether to loop the script
@@ -459,7 +481,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   }
 
   /**
-   * Stop playback
+   * Stop playback (works for both HSSP and HSP)
    */
   async stop(): Promise<boolean> {
     if (!this.isConnected) {
@@ -468,11 +490,19 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
     }
 
     try {
-      const hspState = await this._api.stop();
+      // Try HSP stop first, then HSSP stop
+      let hspState = await this._api.hspStop();
+      if (!hspState) {
+        hspState = await this._api.stop();
+      }
 
       if (hspState) {
         this._isPlaying =
-          hspState.play_state === 1 || hspState.play_state === "1";
+          hspState.play_state === HspPlayState.PLAYING ||
+          hspState.play_state === 1 ||
+          hspState.play_state === "1";
+
+        this._hspState = hspState;
 
         this.emit("playbackStateChanged", {
           isPlaying: this._isPlaying,
@@ -484,12 +514,10 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
         return false;
       }
     } catch (error) {
-      console.error("Handy: Error stopping script:", error);
+      console.error("Handy: Error stopping:", error);
       this.emit(
         "error",
-        `Stop playback error: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `Stop error: ${error instanceof Error ? error.message : String(error)}`
       );
       return false;
     }
@@ -528,6 +556,367 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       ...this._deviceInfo,
     };
   }
+
+  // ============================================
+  // HSP (Handy Streaming Protocol) Methods
+  // ============================================
+
+  /**
+   * Initialize a new HSP session.
+   * This clears any existing session state and prepares the device for streaming.
+   * @param streamId Optional custom stream ID
+   */
+  async hspSetup(streamId?: number): Promise<HspState | null> {
+    if (!this.isConnected) {
+      this.emit("error", "Cannot setup HSP: Device not connected");
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspSetup(streamId);
+      if (state) {
+        this._hspState = state;
+        this._hspStreamIndex = 0;
+        this.emit("hspStateChanged", state);
+      }
+      return state;
+    } catch (error) {
+      console.error("Handy: Error setting up HSP:", error);
+      this.emit(
+        "error",
+        `HSP setup error: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Get the current HSP state from the device
+   */
+  async hspGetState(): Promise<HspState | null> {
+    if (!this.isConnected) {
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspGetState();
+      if (state) {
+        this._hspState = state;
+      }
+      return state;
+    } catch (error) {
+      console.error("Handy: Error getting HSP state:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Add points to the HSP buffer.
+   * Points are {t, x} where:
+   *   - t: timestamp in ms relative to start (t=0)
+   *   - x: position 0-100 (0=bottom, 100=top)
+   *
+   * @param points Array of points to add (max 100 per call)
+   * @param flush If true, clear buffer before adding
+   */
+  async hspAddPoints(
+    points: HspPoint[],
+    flush: boolean = false
+  ): Promise<HspState | null> {
+    if (!this.isConnected) {
+      this.emit("error", "Cannot add HSP points: Device not connected");
+      return null;
+    }
+
+    try {
+      // Update stream index
+      this._hspStreamIndex += points.length;
+
+      const state = await this._api.hspAddPoints(
+        points,
+        this._hspStreamIndex,
+        flush
+      );
+
+      if (state) {
+        this._hspState = state;
+        this.emit("hspStateChanged", state);
+      }
+
+      return state;
+    } catch (error) {
+      console.error("Handy: Error adding HSP points:", error);
+      this.emit(
+        "error",
+        `HSP add points error: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Start HSP playback
+   * @param startTime Time to start from (in ms, relative to points)
+   * @param options Playback options
+   */
+  async hspPlay(
+    startTime: number = 0,
+    options: {
+      playbackRate?: number;
+      pauseOnStarving?: boolean;
+      loop?: boolean;
+    } = {}
+  ): Promise<HspState | null> {
+    if (!this.isConnected) {
+      this.emit("error", "Cannot start HSP: Device not connected");
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspPlay(startTime, options);
+
+      if (state) {
+        this._hspState = state;
+        this._isPlaying =
+          state.play_state === HspPlayState.PLAYING ||
+          state.play_state === 1 ||
+          state.play_state === "1";
+
+        this.emit("hspStateChanged", state);
+        this.emit("playbackStateChanged", {
+          isPlaying: this._isPlaying,
+          timeMs: startTime,
+          playbackRate: options.playbackRate ?? 1.0,
+          loop: options.loop ?? false,
+        });
+      }
+
+      return state;
+    } catch (error) {
+      console.error("Handy: Error starting HSP playback:", error);
+      this.emit(
+        "error",
+        `HSP play error: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Stop HSP playback
+   */
+  async hspStop(): Promise<HspState | null> {
+    if (!this.isConnected) {
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspStop();
+
+      if (state) {
+        this._hspState = state;
+        this._isPlaying = false;
+        this.emit("hspStateChanged", state);
+        this.emit("playbackStateChanged", { isPlaying: false });
+      }
+
+      return state;
+    } catch (error) {
+      console.error("Handy: Error stopping HSP:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Pause HSP playback
+   */
+  async hspPause(): Promise<HspState | null> {
+    if (!this.isConnected) {
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspPause();
+
+      if (state) {
+        this._hspState = state;
+        this._isPlaying = false;
+        this.emit("hspStateChanged", state);
+        this.emit("playbackStateChanged", { isPlaying: false });
+      }
+
+      return state;
+    } catch (error) {
+      console.error("Handy: Error pausing HSP:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Resume HSP playback
+   * @param pickUp If true, resumes from current live position. If false, from paused position.
+   */
+  async hspResume(pickUp: boolean = false): Promise<HspState | null> {
+    if (!this.isConnected) {
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspResume(pickUp);
+
+      if (state) {
+        this._hspState = state;
+        this._isPlaying =
+          state.play_state === HspPlayState.PLAYING ||
+          state.play_state === 1 ||
+          state.play_state === "1";
+
+        this.emit("hspStateChanged", state);
+        this.emit("playbackStateChanged", { isPlaying: this._isPlaying });
+      }
+
+      return state;
+    } catch (error) {
+      console.error("Handy: Error resuming HSP:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Flush the HSP buffer (remove all points)
+   */
+  async hspFlush(): Promise<HspState | null> {
+    if (!this.isConnected) {
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspFlush();
+
+      if (state) {
+        this._hspState = state;
+        this._hspStreamIndex = 0;
+        this.emit("hspStateChanged", state);
+      }
+
+      return state;
+    } catch (error) {
+      console.error("Handy: Error flushing HSP:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Set HSP loop mode
+   */
+  async hspSetLoop(loop: boolean): Promise<HspState | null> {
+    if (!this.isConnected) {
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspSetLoop(loop);
+      if (state) {
+        this._hspState = state;
+        this.emit("hspStateChanged", state);
+      }
+      return state;
+    } catch (error) {
+      console.error("Handy: Error setting HSP loop:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Set HSP playback rate
+   */
+  async hspSetPlaybackRate(rate: number): Promise<HspState | null> {
+    if (!this.isConnected) {
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspSetPlaybackRate(rate);
+      if (state) {
+        this._hspState = state;
+        this.emit("hspStateChanged", state);
+      }
+      return state;
+    } catch (error) {
+      console.error("Handy: Error setting HSP playback rate:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Sync HSP time with external source
+   */
+  async hspSyncTime(
+    currentTime: number,
+    filter: number = 0.5
+  ): Promise<HspState | null> {
+    if (!this.isConnected || !this._isPlaying) {
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspSyncTime(currentTime, filter);
+      if (state) {
+        this._hspState = state;
+        this.emit("hspStateChanged", state);
+      }
+      return state;
+    } catch (error) {
+      console.error("Handy: Error syncing HSP time:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Set pause-on-starving flag
+   * When enabled, device clock pauses when buffer runs out and resumes when points are added
+   */
+  async hspSetPauseOnStarving(pause: boolean): Promise<HspState | null> {
+    if (!this.isConnected) {
+      return null;
+    }
+
+    try {
+      const state = await this._api.hspSetPauseOnStarving(pause);
+      if (state) {
+        this._hspState = state;
+        this.emit("hspStateChanged", state);
+      }
+      return state;
+    } catch (error) {
+      console.error("Handy: Error setting pause on starving:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the current stream index for tracking
+   */
+  getHspStreamIndex(): number {
+    return this._hspStreamIndex;
+  }
+
+  /**
+   * Reset the stream index (call after hspSetup)
+   */
+  resetHspStreamIndex(): void {
+    this._hspStreamIndex = 0;
+  }
+
+  // ============================================
+  // Private Methods
+  // ============================================
 
   /**
    * Set up event handlers for the device
@@ -578,12 +967,36 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       this.emit("playbackStateChanged", { isPlaying: false });
     });
 
+    // HSP-specific events
     this._eventSource.addEventListener("hsp_state_changed", (event) => {
       const data = JSON.parse(event.data);
-      // Set isPlaying based on play_state
-      this._isPlaying =
-        data.data.data?.play_state === 1 || data.data.data?.play_state === "1";
-      this.emit("playbackStateChanged", { isPlaying: this._isPlaying });
+      const state = data.data?.data as HspState;
+
+      if (state) {
+        this._hspState = state;
+        this._isPlaying =
+          state.play_state === HspPlayState.PLAYING ||
+          state.play_state === 1 ||
+          state.play_state === "1";
+
+        this.emit("hspStateChanged", state);
+        this.emit("playbackStateChanged", { isPlaying: this._isPlaying });
+      }
+    });
+
+    this._eventSource.addEventListener("hsp_starving", (event) => {
+      const data = JSON.parse(event.data);
+      this.emit("hspStarving", data.data?.data);
+    });
+
+    this._eventSource.addEventListener("hsp_threshold_reached", (event) => {
+      const data = JSON.parse(event.data);
+      this.emit("hspThresholdReached", data.data?.data);
+    });
+
+    this._eventSource.addEventListener("hsp_looping", (event) => {
+      const data = JSON.parse(event.data);
+      this.emit("hspLooping", data.data?.data);
     });
   }
 

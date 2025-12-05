@@ -17,6 +17,49 @@ export interface HandyDeviceInfo {
 }
 
 /**
+ * HSP Point - a single point in the HSP buffer
+ * t: timestamp in milliseconds relative to start time (t=0)
+ * x: position [0-100] where 0=bottom, 100=top
+ */
+export interface HspPoint {
+  t: number;
+  x: number;
+}
+
+/**
+ * HSP Add request - for adding points to the device buffer
+ */
+export interface HspAddRequest {
+  points: HspPoint[];
+  flush?: boolean;
+  tail_point_stream_index: number;
+  tail_point_threshold?: number;
+}
+
+/**
+ * HSP Play request
+ */
+export interface HspPlayRequest {
+  start_time: number;
+  server_time?: number;
+  playback_rate?: number;
+  pause_on_starving?: boolean;
+  loop?: boolean;
+  add?: HspAddRequest;
+}
+
+/**
+ * HSP Play state enum
+ */
+export enum HspPlayState {
+  NOT_INITIALIZED = 0,
+  PLAYING = 1,
+  STOPPED = 2,
+  PAUSED = 3,
+  STARVING = 4,
+}
+
+/**
  * Handy time information for synchronization
  */
 export interface HandyTimeInfo {
@@ -33,7 +76,7 @@ export interface OffsetResponse {
 }
 
 /**
- * HSP State (Handy Script Protocol)
+ * HSP State (Handy Streaming Protocol)
  */
 export interface HspState {
   play_state: number | string;
@@ -73,13 +116,6 @@ export interface ApiResponse<T = unknown> {
     connected: boolean;
     data?: unknown;
   };
-}
-
-/**
- * Upload response
- */
-export interface UploadResponse {
-  url: string;
 }
 
 /**
