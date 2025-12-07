@@ -1,10 +1,18 @@
 /**
  * Device Manager
  *
- * Central manager for all haptic devices
+ * Central manager for all haptic devices.
+ * Handles unified script loading and distribution to devices.
  */
 import { EventEmitter } from "./events";
-import { HapticDevice, ScriptData, ScriptOptions } from "./device-interface";
+import {
+  HapticDevice,
+  ScriptData,
+  ScriptOptions,
+  ScriptLoadResult,
+  Funscript,
+} from "./device-interface";
+import { loadScript } from "./script-loader";
 
 /**
  * Device Manager class
@@ -12,25 +20,36 @@ import { HapticDevice, ScriptData, ScriptOptions } from "./device-interface";
  */
 export class DeviceManager extends EventEmitter {
   private devices: Map<string, HapticDevice> = new Map();
-  private scriptData: ScriptData | null = null;
+  private currentFunscript: Funscript | null = null;
+  private currentScriptOptions: ScriptOptions | null = null;
 
   /**
    * Register a device with the manager
    * @param device Device to register
    */
   registerDevice(device: HapticDevice): void {
-    // Don't register the same device twice
     if (this.devices.has(device.id)) {
       return;
     }
 
     this.devices.set(device.id, device);
-
-    // Forward events from this device
     this.setupDeviceEventForwarding(device);
-
-    // Emit device added event
     this.emit("deviceAdded", device);
+
+    // If we have a script loaded, prepare it on the new device
+    if (this.currentFunscript) {
+      device
+        .prepareScript(
+          this.currentFunscript,
+          this.currentScriptOptions ?? undefined
+        )
+        .catch((error) => {
+          console.error(
+            `Error preparing script on newly registered device ${device.id}:`,
+            error
+          );
+        });
+    }
   }
 
   /**
@@ -58,6 +77,13 @@ export class DeviceManager extends EventEmitter {
    */
   getDevice(deviceId: string): HapticDevice | undefined {
     return this.devices.get(deviceId);
+  }
+
+  /**
+   * Get the currently loaded funscript
+   */
+  getCurrentFunscript(): Funscript | null {
+    return this.currentFunscript;
   }
 
   /**
@@ -99,44 +125,77 @@ export class DeviceManager extends EventEmitter {
   }
 
   /**
-   * Load a script to all connected devices
-   * @param scriptData Script data to load
+   * Load a script - fetches, parses, and prepares on all connected devices
+   *
+   * This is the main entry point for loading scripts. It:
+   * 1. Fetches and parses the script (once, centrally)
+   * 2. Applies any transformations (inversion, sorting)
+   * 3. Distributes to all connected devices
+   * 4. Returns the funscript along with per-device results
+   *
+   * @param scriptData Script data to load (URL or content)
    * @param options Options for script loading (e.g., invertScript)
-   * @returns Object with success status for each device
+   * @returns ScriptLoadResult with funscript and per-device status
    */
-  async loadScriptAll(
+  async loadScript(
     scriptData: ScriptData,
     options?: ScriptOptions
-  ): Promise<Record<string, boolean | ScriptData>> {
-    const results: Record<
-      string,
-      { success: boolean; scriptContent?: ScriptData }
-    > = {};
-    this.scriptData = scriptData;
+  ): Promise<ScriptLoadResult> {
+    // Step 1: Fetch and parse the script centrally
+    const loadResult = await loadScript(scriptData, options);
+
+    if (!loadResult.success || !loadResult.funscript) {
+      return {
+        success: false,
+        funscript: null,
+        error: loadResult.error,
+        devices: {},
+      };
+    }
+
+    // Store the loaded script
+    this.currentFunscript = loadResult.funscript;
+    this.currentScriptOptions = options ?? null;
+
+    // Step 2: Prepare on all connected devices
+    const deviceResults: Record<string, { success: boolean; error?: string }> =
+      {};
 
     for (const [id, device] of this.devices.entries()) {
+      // Only prepare on connected devices (or buttplug which manages its own connection)
       if (device.isConnected || device.id === "buttplug") {
         try {
-          results[id] = await device.loadScript(scriptData, options);
+          const result = await device.prepareScript(
+            loadResult.funscript,
+            options
+          );
+          deviceResults[id] = result;
         } catch (error) {
-          console.error(`Error loading script to device ${id}:`, error);
-          results[id] = { success: false };
+          console.error(`Error preparing script on device ${id}:`, error);
+          deviceResults[id] = {
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          };
         }
       } else {
-        results[id] = { success: false };
+        deviceResults[id] = {
+          success: false,
+          error: "Device not connected",
+        };
       }
     }
 
-    const transformedResults: Record<string, boolean | ScriptData> = {};
+    // Emit event
+    this.emit("scriptLoaded", {
+      funscript: loadResult.funscript,
+      devices: deviceResults,
+    });
 
-    for (const [id, result] of Object.entries(results)) {
-      if (result.scriptContent) {
-        transformedResults["script"] = result.scriptContent;
-      }
-      transformedResults[id] = result.success;
-    }
-
-    return transformedResults;
+    return {
+      success: true,
+      funscript: loadResult.funscript,
+      devices: deviceResults,
+    };
   }
 
   /**
@@ -221,11 +280,18 @@ export class DeviceManager extends EventEmitter {
   }
 
   /**
+   * Clear the currently loaded script
+   */
+  clearScript(): void {
+    this.currentFunscript = null;
+    this.currentScriptOptions = null;
+  }
+
+  /**
    * Set up event forwarding from a device to the manager
    * @param device Device to forward events from
    */
   private setupDeviceEventForwarding(device: HapticDevice): void {
-    // Forward common events
     const eventsToForward = [
       "error",
       "connected",
@@ -239,7 +305,6 @@ export class DeviceManager extends EventEmitter {
     for (const eventName of eventsToForward) {
       device.on(eventName, (data) => {
         this.emit(`device:${device.id}:${eventName}`, data);
-        // Also emit a general event for any device
         this.emit(`device:${eventName}`, { deviceId: device.id, data });
       });
     }

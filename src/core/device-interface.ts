@@ -31,7 +31,7 @@ export interface DeviceInfo {
   type: string; // Device type identifier (e.g., "handy", "buttplug")
   firmware?: string; // Firmware version if available
   hardware?: string; // Hardware version if available
-  [key: string]: any; // Additional device-specific information
+  [key: string]: unknown; // Additional device-specific information
 }
 
 /**
@@ -42,24 +42,66 @@ export interface DeviceSettings {
   id: string; // Device identifier
   name: string; // Human-readable name
   enabled: boolean; // Whether the device is enabled
-  [key: string]: any; // Additional device-specific settings
+  [key: string]: unknown; // Additional device-specific settings
 }
 
 /**
- * Script data interface
+ * Funscript action
+ */
+export interface FunscriptAction {
+  at: number; // Timestamp in milliseconds
+  pos: number; // Position 0-100
+}
+
+/**
+ * Funscript format
+ */
+export interface Funscript {
+  actions: FunscriptAction[];
+  inverted?: boolean;
+  range?: number;
+  version?: string;
+  metadata?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Script data interface - input for loading scripts
  */
 export interface ScriptData {
-  type: string; // Script type (e.g., "funscript")
+  type: string; // Script type (e.g., "funscript", "csv")
   url?: string; // URL to script if remote
-  content?: any; // Script content if loaded directly
+  content?: Funscript; // Script content if loaded directly
 }
 
 /**
  * Script options interface
  */
-export type ScriptOptions = {
+export interface ScriptOptions {
   invertScript?: boolean; // Whether to invert script values
-};
+}
+
+/**
+ * Result from loading a script to a single device
+ */
+export interface DeviceScriptLoadResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Result from loading a script via DeviceManager
+ */
+export interface ScriptLoadResult {
+  /** The parsed and processed funscript content */
+  funscript: Funscript | null;
+  /** Whether the script was successfully fetched/parsed */
+  success: boolean;
+  /** Error message if fetching/parsing failed */
+  error?: string;
+  /** Per-device load results */
+  devices: Record<string, DeviceScriptLoadResult>;
+}
 
 /**
  * Common interface for all haptic devices
@@ -83,7 +125,7 @@ export interface HapticDevice {
    * Connect to the device
    * @param config Optional configuration
    */
-  connect(config?: any): Promise<boolean>;
+  connect(config?: unknown): Promise<boolean>;
 
   /**
    * Disconnect from the device
@@ -102,13 +144,17 @@ export interface HapticDevice {
   updateConfig(config: Partial<DeviceSettings>): Promise<boolean>;
 
   /**
-   * Load a script for playback
-   * @param scriptData Script data to load
+   * Prepare the device to play a script
+   * The funscript content is already parsed - device just needs to prepare it
+   * (e.g., upload to server for Handy, store in memory for Buttplug)
+   *
+   * @param funscript The parsed funscript content
+   * @param options Script options (e.g., inversion already applied)
    */
-  loadScript(
-    scriptData: ScriptData,
+  prepareScript(
+    funscript: Funscript,
     options?: ScriptOptions
-  ): Promise<{ success: boolean; scriptContent?: ScriptData }>;
+  ): Promise<DeviceScriptLoadResult>;
 
   /**
    * Play the loaded script at the specified time
@@ -140,12 +186,12 @@ export interface HapticDevice {
    * @param event Event name
    * @param callback Callback function
    */
-  on(event: string, callback: (data: any) => void): void;
+  on(event: string, callback: (data: unknown) => void): void;
 
   /**
    * Remove event listener
    * @param event Event name
    * @param callback Callback function
    */
-  off(event: string, callback: (data: any) => void): void;
+  off(event: string, callback: (data: unknown) => void): void;
 }

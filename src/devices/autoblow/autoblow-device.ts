@@ -8,17 +8,13 @@ import {
   ConnectionState,
   DeviceCapability,
   DeviceInfo,
+  DeviceScriptLoadResult,
+  Funscript,
+  FunscriptAction,
   HapticDevice,
-  ScriptData,
-  ScriptOptions,
 } from "../../core/device-interface";
 import { EventEmitter } from "../../core/events";
-import {
-  AutoblowSettings,
-  AutoblowFunscript,
-  AutoblowDeviceType,
-} from "./types";
-import { parseCSVToFunscript } from "../../utils/parseCSVToFunscript";
+import { AutoblowSettings, AutoblowDeviceType } from "./types";
 
 // Use type imports for SDK types to avoid runtime issues
 import type * as AutoblowSdkTypes from "@xsense/autoblow-sdk";
@@ -45,7 +41,7 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
     null;
   private _deviceType: AutoblowDeviceType | null = null;
   private _isPlaying: boolean = false;
-  private _loadedScript: AutoblowFunscript | null = null;
+  private _scriptPrepared: boolean = false;
 
   readonly id: string = "autoblow";
   readonly name: string = "Autoblow";
@@ -164,7 +160,7 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
       this._deviceInfo = null;
       this._deviceType = null;
       this._isPlaying = false;
-      this._loadedScript = null;
+      this._scriptPrepared = false;
       this._connectionState = ConnectionState.DISCONNECTED;
 
       this.emit("connectionStateChanged", this._connectionState);
@@ -221,85 +217,53 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
   }
 
   /**
-   * Load a script for playback
+   * Prepare a script for playback (upload to device)
+   * The funscript is already parsed - we just need to upload it
+   *
+   * @param funscript The parsed funscript content
    */
-  async loadScript(
-    scriptData: ScriptData,
-    options: ScriptOptions = { invertScript: false }
-  ): Promise<{ success: boolean; scriptContent?: ScriptData }> {
+  async prepareScript(funscript: Funscript): Promise<DeviceScriptLoadResult> {
     if (!this.isConnected || !this._device) {
-      this.emit("error", "Cannot load script: Device not connected");
-      return { success: false };
+      return { success: false, error: "Device not connected" };
     }
 
     try {
-      let funscript: AutoblowFunscript;
-
-      if (scriptData.content) {
-        // Direct content provided
-        funscript = scriptData.content as AutoblowFunscript;
-      } else if (scriptData.url) {
-        // Fetch from URL
-        const response = await fetch(scriptData.url);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch script: ${response.status}`);
-        }
-
-        const fileExtension = scriptData.url.toLowerCase().split(".").pop();
-
-        if (fileExtension === "csv") {
-          const csvText = await response.text();
-          funscript = parseCSVToFunscript(csvText) as AutoblowFunscript;
-        } else {
-          funscript = await response.json();
-        }
-      } else {
-        this.emit(
-          "error",
-          "Invalid script data: Either URL or content must be provided"
-        );
-        return { success: false };
-      }
-
       // Validate funscript format
       if (!funscript.actions || !Array.isArray(funscript.actions)) {
-        this.emit("error", "Invalid script format: Missing actions array");
-        return { success: false };
-      }
-
-      // Apply inversion if needed
-      if (options.invertScript) {
-        funscript = {
-          ...funscript,
-          actions: funscript.actions.map((action) => ({
-            ...action,
-            pos: 100 - action.pos,
-          })),
+        return {
+          success: false,
+          error: "Invalid script format: Missing actions array",
         };
       }
 
-      // Upload to device
+      // Convert to Autoblow SDK format and upload
+      const sdkFunscript = {
+        actions: funscript.actions.map((action: FunscriptAction) => ({
+          at: action.at,
+          pos: action.pos,
+        })),
+      };
+
       await this._device.syncScriptUploadFunscriptFile(
-        funscript as AutoblowSdkTypes.Funscript
+        sdkFunscript as AutoblowSdkTypes.Funscript
       );
 
-      this._loadedScript = funscript;
+      this._scriptPrepared = true;
 
       this.emit("scriptLoaded", {
-        type: scriptData.type || "funscript",
+        type: "funscript",
         actions: funscript.actions.length,
       });
 
-      return { success: true, scriptContent: scriptData };
+      return { success: true };
     } catch (error) {
-      console.error("Autoblow: Error loading script:", error);
-      this.emit(
-        "error",
-        `Script loading error: ${
+      console.error("Autoblow: Error preparing script:", error);
+      return {
+        success: false,
+        error: `Script preparation error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return { success: false };
+        }`,
+      };
     }
   }
 
@@ -316,8 +280,8 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
       return false;
     }
 
-    if (!this._loadedScript) {
-      this.emit("error", "Cannot play: No script loaded");
+    if (!this._scriptPrepared) {
+      this.emit("error", "Cannot play: No script prepared");
       return false;
     }
 

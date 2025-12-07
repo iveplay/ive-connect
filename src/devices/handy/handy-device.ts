@@ -5,9 +5,9 @@ import {
   ConnectionState,
   DeviceCapability,
   DeviceInfo,
+  DeviceScriptLoadResult,
+  Funscript,
   HapticDevice,
-  ScriptData,
-  ScriptOptions,
 } from "../../core/device-interface";
 import { EventEmitter } from "../../core/events";
 import { HandyApi, createHandyApi } from "./handy-api";
@@ -54,6 +54,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   private _deviceInfo: HandyDeviceInfo | null = null;
   private _isPlaying: boolean = false;
   private _eventSource: EventSource | null = null;
+  private _scriptPrepared: boolean = false;
 
   // HSP state tracking
   private _hspState: HspState | null = null;
@@ -204,6 +205,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       this._deviceInfo = null;
       this._isPlaying = false;
       this._hspState = null;
+      this._scriptPrepared = false;
 
       // Emit events
       this.emit("connectionStateChanged", this._connectionState);
@@ -276,160 +278,52 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   }
 
   /**
-   * Load a script for playback (HSSP)
-   * @param scriptData Script data to load
+   * Prepare a script for playback (upload to Handy server)
+   * The funscript is already parsed - we just need to upload it
+   *
+   * @param funscript The parsed funscript content
+   * @param _options Script options (inversion already applied by DeviceManager)
    */
-  async loadScript(
-    scriptData: ScriptData,
-    options: ScriptOptions = { invertScript: false }
-  ): Promise<{ success: boolean }> {
+  async prepareScript(funscript: Funscript): Promise<DeviceScriptLoadResult> {
     if (!this.isConnected) {
-      this.emit("error", "Cannot load script: Device not connected");
-      return { success: false };
+      return { success: false, error: "Device not connected" };
     }
 
     try {
-      let scriptContent: any;
-      let scriptUrl: string;
+      // Convert funscript to blob and upload
+      const blob = new Blob([JSON.stringify(funscript)], {
+        type: "application/json",
+      });
 
-      if (scriptData.url) {
-        if (
-          scriptData.url.toLowerCase().endsWith(".funscript") ||
-          scriptData.type === "funscript"
-        ) {
-          try {
-            const response = await fetch(scriptData.url);
-            if (!response.ok) {
-              throw new Error(`Failed to fetch funscript: ${response.status}`);
-            }
-
-            scriptContent = await response.json();
-
-            if (options.invertScript && scriptContent.actions) {
-              scriptContent.actions = scriptContent.actions.map(
-                (action: any) => ({
-                  ...action,
-                  pos: 100 - action.pos,
-                })
-              );
-            }
-
-            const blob = new Blob([JSON.stringify(scriptContent)], {
-              type: "application/json",
-            });
-
-            const uploadedUrl = await this._api.uploadScript(blob);
-            if (!uploadedUrl) {
-              throw new Error("Failed to upload funscript");
-            }
-
-            scriptUrl = uploadedUrl;
-          } catch (error) {
-            console.error("Error processing funscript URL:", error);
-            scriptUrl = scriptData.url;
-          }
-        } else {
-          try {
-            const response = await fetch(scriptData.url);
-            if (!response.ok) {
-              throw new Error(`Failed to fetch script: ${response.status}`);
-            }
-
-            const fileExtension = scriptData.url.toLowerCase().split(".").pop();
-
-            if (fileExtension === "csv") {
-              let csvText = await response.text();
-
-              if (options.invertScript) {
-                const lines = csvText.split("\n");
-                const hasHeader = isNaN(parseFloat(lines[0].split(",")[0]));
-                const startIndex = hasHeader ? 1 : 0;
-
-                for (let i = startIndex; i < lines.length; i++) {
-                  const line = lines[i].trim();
-                  if (!line) continue;
-
-                  const columns = line.split(",");
-                  if (columns.length >= 2) {
-                    const pos = parseFloat(columns[1].trim());
-                    if (!isNaN(pos)) {
-                      columns[1] = (100 - pos).toString();
-                      lines[i] = columns.join(",");
-                    }
-                  }
-                }
-
-                csvText = lines.join("\n");
-              }
-
-              const blob = new Blob([csvText], {
-                type: "text/csv",
-              });
-
-              const uploadedUrl = await this._api.uploadScript(blob);
-              if (!uploadedUrl) {
-                throw new Error("Failed to upload CSV script");
-              }
-
-              scriptUrl = uploadedUrl;
-            } else {
-              scriptUrl = scriptData.url;
-            }
-          } catch (error) {
-            console.error("Error processing script URL:", error);
-            scriptUrl = scriptData.url;
-          }
-        }
-      } else if (scriptData.content) {
-        scriptContent = { ...scriptData.content };
-
-        if (options.invertScript && scriptContent.actions) {
-          scriptContent.actions = scriptContent.actions.map((action: any) => ({
-            ...action,
-            pos: 100 - action.pos,
-          }));
-        }
-
-        const blob = new Blob([JSON.stringify(scriptContent)], {
-          type: "application/json",
-        });
-
-        const uploadedUrl = await this._api.uploadScript(blob);
-        if (!uploadedUrl) {
-          this.emit("error", "Failed to upload script");
-          return { success: false };
-        }
-
-        scriptUrl = uploadedUrl;
-      } else {
-        this.emit(
-          "error",
-          "Invalid script data: Either URL or content must be provided"
-        );
-        return { success: false };
+      const uploadedUrl = await this._api.uploadScript(blob);
+      if (!uploadedUrl) {
+        return {
+          success: false,
+          error: "Failed to upload script to Handy server",
+        };
       }
 
-      const success = await this._api.setupScript(scriptUrl);
+      // Setup the script on the device
+      const success = await this._api.setupScript(uploadedUrl);
 
       if (success) {
+        this._scriptPrepared = true;
         this.emit("scriptLoaded", {
-          url: scriptUrl,
-          options,
+          url: uploadedUrl,
+          actions: funscript.actions.length,
         });
         return { success: true };
       } else {
-        this.emit("error", "Failed to set up script with device");
-        return { success: false };
+        return { success: false, error: "Failed to setup script on device" };
       }
     } catch (error) {
-      console.error("Handy: Error loading script:", error);
-      this.emit(
-        "error",
-        `Script loading error: ${
+      console.error("Handy: Error preparing script:", error);
+      return {
+        success: false,
+        error: `Script preparation error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return { success: false };
+        }`,
+      };
     }
   }
 
@@ -446,6 +340,11 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   ): Promise<boolean> {
     if (!this.isConnected) {
       this.emit("error", "Cannot play: Device not connected");
+      return false;
+    }
+
+    if (!this._scriptPrepared) {
+      this.emit("error", "Cannot play: No script prepared");
       return false;
     }
 
@@ -956,13 +855,13 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       this.emit("connected", this._deviceInfo);
     });
 
-    this._eventSource.addEventListener("device_disconnected", (event) => {
+    this._eventSource.addEventListener("device_disconnected", () => {
       this._connectionState = ConnectionState.DISCONNECTED;
       this.emit("connectionStateChanged", this._connectionState);
       this.emit("disconnected");
     });
 
-    this._eventSource.addEventListener("mode_changed", (event) => {
+    this._eventSource.addEventListener("mode_changed", () => {
       this._isPlaying = false;
       this.emit("playbackStateChanged", { isPlaying: false });
     });

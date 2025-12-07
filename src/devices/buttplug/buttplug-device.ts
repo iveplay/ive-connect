@@ -7,9 +7,10 @@ import {
   ConnectionState,
   DeviceCapability,
   DeviceInfo,
+  DeviceScriptLoadResult,
+  Funscript,
+  FunscriptAction,
   HapticDevice,
-  ScriptData,
-  ScriptOptions,
 } from "../../core/device-interface";
 import { EventEmitter } from "../../core/events";
 import { ButtplugApi } from "./buttplug-api";
@@ -22,7 +23,6 @@ import {
 } from "./types";
 import { generateClientName, isWebBluetoothSupported } from "./buttplug-server";
 import { createMultiDeviceCommandExecutor } from "./command-helpers";
-import { parseCSVToFunscript } from "../../utils/parseCSVToFunscript";
 
 /**
  * Default Buttplug configuration
@@ -51,13 +51,13 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
   private _config: ButtplugSettings;
   private _connectionState: ConnectionState = ConnectionState.DISCONNECTED;
   private _isPlaying: boolean = false;
-  private _loadedScript: any = null;
-  private _currentScriptActions: any[] = [];
+  private _currentScriptActions: FunscriptAction[] = [];
   private _lastActionIndex: number = -1;
-  private _playbackInterval: number | null = null;
+  private _playbackInterval: ReturnType<typeof setInterval> | null = null;
   private _playbackStartTime: number = 0;
   private _playbackRate: number = 1.0;
   private _loopPlayback: boolean = false;
+  private _scriptPrepared: boolean = false;
 
   readonly id: string = "buttplug";
   readonly name: string = "Buttplug Devices";
@@ -173,6 +173,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
 
       // Update state
       this._connectionState = ConnectionState.DISCONNECTED;
+      this._scriptPrepared = false;
       this.emit("connectionStateChanged", this._connectionState);
       this.emit("disconnected");
 
@@ -254,137 +255,32 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
   }
 
   /**
-   * Load a script for playback
+   * Prepare a script for playback (store in memory)
+   * The funscript is already parsed - we just store the actions
+   *
+   * @param funscript The parsed funscript content
    */
-  async loadScript(
-    scriptData: ScriptData,
-    options: ScriptOptions = { invertScript: false }
-  ): Promise<{ success: boolean; scriptContent?: any }> {
-    // Parse script data
-    let scriptContent: any;
-
+  async prepareScript(funscript: Funscript): Promise<DeviceScriptLoadResult> {
     try {
-      if (scriptData.content) {
-        // If content is directly provided
-        scriptContent = scriptData.content;
-      } else if (scriptData.url) {
-        // If URL is provided, fetch the script
-        try {
-          console.log(
-            `[BUTTPLUG-SCRIPT] Fetching script from URL: ${scriptData.url}`
-          );
-          const response = await fetch(scriptData.url);
-          if (!response.ok) {
-            throw new Error(
-              `Failed to fetch script: ${response.status} ${response.statusText}`
-            );
-          }
-
-          // Determine if it's a CSV or JSON (funscript) based on file extension
-          const fileExtension = scriptData.url.toLowerCase().split(".").pop();
-
-          if (fileExtension === "csv") {
-            // Handle CSV file
-            const csvText = await response.text();
-            scriptContent = parseCSVToFunscript(csvText);
-            console.log(
-              `[BUTTPLUG-SCRIPT] CSV loaded and converted to funscript format, actions:`,
-              scriptContent.actions?.length
-            );
-          } else {
-            // Handle JSON file (funscript)
-            try {
-              scriptContent = await response.json();
-              console.log(
-                `[BUTTPLUG-SCRIPT] Script loaded successfully, actions:`,
-                scriptContent.actions?.length
-              );
-            } catch (parseError) {
-              // If JSON parsing fails, try as CSV
-              const text = await response.text();
-              try {
-                // First try to parse as JSON again with some cleanup
-                scriptContent = JSON.parse(text.trim());
-              } catch {
-                // If that fails, try CSV parsing
-                scriptContent = parseCSVToFunscript(text);
-              }
-              console.log(
-                `[BUTTPLUG-SCRIPT] File loaded and parsed as CSV, actions:`,
-                scriptContent.actions?.length
-              );
-            }
-          }
-        } catch (error) {
-          this.emit(
-            "error",
-            `Failed to fetch script: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          );
-          return { success: false };
-        }
-      } else {
-        this.emit(
-          "error",
-          "Invalid script data: Either URL or content must be provided"
-        );
-        return { success: false };
-      }
-
-      if (!this.isConnected) {
-        this.emit("error", "Cannot load script: Not connected to a server");
-        return { success: false, scriptContent };
-      }
-
-      // Validate script format (basic checks for funscript)
-      if (
-        !scriptContent ||
-        !scriptContent.actions ||
-        !Array.isArray(scriptContent.actions)
-      ) {
-        this.emit("error", "Invalid script format: Missing actions array");
-        console.error(
-          "[BUTTPLUG-SCRIPT] Invalid script format:",
-          scriptContent
-        );
-        return { success: false, scriptContent };
-      }
-
-      // Apply inversion to script actions if needed
-      let actions = [...scriptContent.actions];
-      if (options.invertScript) {
-        console.log("[BUTTPLUG-SCRIPT] Applying inversion to script");
-        actions = actions.map((action) => ({
-          ...action,
-          pos: 100 - action.pos,
-        }));
-      }
-
-      // Sort actions by timestamp
-      actions.sort((a, b) => a.at - b.at);
-
-      // Store the script and actions
-      this._loadedScript = scriptContent;
-      this._currentScriptActions = actions;
+      // Store the actions (already sorted and processed by DeviceManager)
+      this._currentScriptActions = [...funscript.actions];
       this._lastActionIndex = -1;
+      this._scriptPrepared = true;
 
       this.emit("scriptLoaded", {
-        type: scriptData.type || "funscript",
-        name: scriptContent.name || "Unnamed Script",
+        type: "funscript",
         actions: this._currentScriptActions.length,
       });
 
-      return { success: true, scriptContent };
+      return { success: true };
     } catch (error) {
-      console.error("Buttplug: Error loading script:", error);
-      this.emit(
-        "error",
-        `Script loading error: ${
+      console.error("Buttplug: Error preparing script:", error);
+      return {
+        success: false,
+        error: `Script preparation error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return { success: false };
+        }`,
+      };
     }
   }
 
@@ -401,8 +297,8 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       return false;
     }
 
-    if (!this._loadedScript || !this._currentScriptActions.length) {
-      this.emit("error", "Cannot play: No script loaded");
+    if (!this._scriptPrepared || !this._currentScriptActions.length) {
+      this.emit("error", "Cannot play: No script prepared");
       return false;
     }
 
@@ -418,7 +314,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       this._loopPlayback = loop;
       this._lastActionIndex = -1;
 
-      // Create command executor for all devices (no stroke range here)
+      // Create command executor for all devices
       const devices = this._api.getDevices();
       const preferences = this._api.getDevicePreferences();
       const executor = createMultiDeviceCommandExecutor(
@@ -434,7 +330,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       // Create an interval to check for actions
       this._playbackInterval = setInterval(() => {
         this._processActions(executor);
-      }, 20) as unknown as number;
+      }, 20);
 
       this.emit("playbackStateChanged", {
         isPlaying: this._isPlaying,
@@ -601,8 +497,8 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       // Calculate duration for linear movement based on time with previous action
       let durationMs = 500; // Default duration if we can't determine
       if (actionIndex < this._currentScriptActions.length - 1) {
-        const prevAction = this._currentScriptActions[actionIndex - 1];
-        durationMs = action?.at - prevAction?.at;
+        const prevActionTime = this._currentScriptActions[actionIndex - 1];
+        durationMs = action?.at - prevActionTime?.at;
 
         // Enforce a minimum duration to prevent erratic movement
         durationMs = Math.max(100, durationMs);
@@ -658,9 +554,7 @@ export class ButtplugDevice extends EventEmitter implements HapticDevice {
       }
     }
 
-    // When returning bestIndex, we're always getting
-    // the last action that has a timestamp <= timeMs
-    // Let's return the next action instead
+    // Return the next action
     return bestIndex < this._currentScriptActions.length - 1
       ? bestIndex + 1
       : bestIndex;
