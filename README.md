@@ -104,6 +104,11 @@ manager.registerDevice(handy);
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Support
+
+- Patreon: [iveplay](https://www.patreon.com/c/iveplay)
+- Solana: `Hbmc4EDZz9Y8qbb4rhnPAvHAjJUFLgSVHPGebHqMKCc7`
+
 ## Acknowledgments
 
 This project uses [buttplug.io](https://buttplug.io) (BSD 3-Clause License) for device communication.  
