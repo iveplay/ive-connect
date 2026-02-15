@@ -29,8 +29,7 @@
   ],
   "dependencies": {
     "@xsense/autoblow-sdk": "^2.0.1",
-    "buttplug": "^3.2.2",
-    "buttplug-wasm": "^2.0.1"
+    "buttplug": "^4.0.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",

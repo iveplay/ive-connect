@@ -8,115 +8,115 @@ import {
   DeviceScriptLoadResult,
   Funscript,
   HapticDevice,
-} from "../../core/device-interface";
-import { EventEmitter } from "../../core/events";
-import { HandyApi, createHandyApi } from "./handy-api";
+} from '../../core/device-interface'
+import { EventEmitter } from '../../core/events'
+import { HandyApi, createHandyApi } from './handy-api'
 import {
   HandyDeviceInfo,
   HandySettings,
   HspState,
   HspPoint,
   HspPlayState,
-} from "./types";
+} from './types'
 
 /**
  * Default Handy configuration
  */
 const DEFAULT_CONFIG: HandySettings = {
-  id: "handy",
-  name: "Handy",
-  connectionKey: "",
+  id: 'handy',
+  name: 'Handy',
+  connectionKey: '',
   enabled: true,
   offset: 0,
   stroke: {
     min: 0,
     max: 1,
   },
-};
+}
 
 /**
  * Handy configuration options
  */
 export interface HandyConfig {
-  connectionKey?: string;
-  baseV3Url?: string;
-  baseV2Url?: string;
-  applicationId?: string;
+  connectionKey?: string
+  baseV3Url?: string
+  baseV2Url?: string
+  applicationId?: string
 }
 
 /**
  * Handy device implementation
  */
 export class HandyDevice extends EventEmitter implements HapticDevice {
-  private _api: HandyApi;
-  private _config: HandySettings;
-  private _connectionState: ConnectionState = ConnectionState.DISCONNECTED;
-  private _deviceInfo: HandyDeviceInfo | null = null;
-  private _isPlaying: boolean = false;
-  private _eventSource: EventSource | null = null;
-  private _scriptPrepared: boolean = false;
+  private _api: HandyApi
+  private _config: HandySettings
+  private _connectionState: ConnectionState = ConnectionState.DISCONNECTED
+  private _deviceInfo: HandyDeviceInfo | null = null
+  private _isPlaying: boolean = false
+  private _eventSource: EventSource | null = null
+  private _scriptPrepared: boolean = false
 
   // HSP state tracking
-  private _hspState: HspState | null = null;
-  private _hspStreamIndex: number = 0;
+  private _hspState: HspState | null = null
+  private _hspStreamIndex: number = 0
 
-  readonly id: string = "handy";
-  readonly name: string = "Handy";
-  readonly type: string = "handy";
+  readonly id: string = 'handy'
+  readonly name: string = 'Handy'
+  readonly type: string = 'handy'
   readonly capabilities: DeviceCapability[] = [
     DeviceCapability.LINEAR,
     DeviceCapability.STROKE,
-  ];
+  ]
 
   /**
    * Create a new Handy device instance
    * @param config Optional configuration
    */
   constructor(config?: HandyConfig) {
-    super();
+    super()
 
-    this._config = { ...DEFAULT_CONFIG };
+    this._config = { ...DEFAULT_CONFIG }
 
     // Set up configuration
     if (config?.connectionKey) {
-      this._config.connectionKey = config.connectionKey;
+      this._config.connectionKey = config.connectionKey
     }
 
     // Create the API client
     this._api = createHandyApi(
-      config?.baseV3Url || "https://www.handyfeeling.com/api/handy-rest/v3",
-      config?.baseV2Url || "https://www.handyfeeling.com/api/hosting/v2",
-      config?.applicationId || "12345",
-      this._config.connectionKey
-    );
+      config?.baseV3Url || 'https://www.handyfeeling.com/api/handy-rest/v3',
+      config?.baseV2Url || 'https://www.handyfeeling.com/api/hosting/v2',
+      config?.applicationId || '12345',
+      this._config.connectionKey,
+    )
   }
 
   /**
    * Get the API instance for direct access
    */
   get api(): HandyApi {
-    return this._api;
+    return this._api
   }
 
   /**
    * Get device connection state
    */
   get isConnected(): boolean {
-    return this._connectionState === ConnectionState.CONNECTED;
+    return this._connectionState === ConnectionState.CONNECTED
   }
 
   /**
    * Get device playback state
    */
   get isPlaying(): boolean {
-    return this._isPlaying;
+    return this._isPlaying
   }
 
   /**
    * Get current HSP state
    */
   get hspState(): HspState | null {
-    return this._hspState;
+    return this._hspState
   }
 
   /**
@@ -127,7 +127,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
     try {
       // Update config if provided
       if (config) {
-        this.updateConfig(config);
+        this.updateConfig(config)
       }
 
       // Validate connection key
@@ -135,52 +135,52 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
         !this._config.connectionKey ||
         this._config.connectionKey.length < 5
       ) {
-        this.emit("error", "Connection key must be at least 5 characters");
-        return false;
+        this.emit('error', 'Connection key must be at least 5 characters')
+        return false
       }
 
       // Update connection state
-      this._connectionState = ConnectionState.CONNECTING;
-      this.emit("connectionStateChanged", this._connectionState);
+      this._connectionState = ConnectionState.CONNECTING
+      this.emit('connectionStateChanged', this._connectionState)
 
       // Synchronize time
-      await this._api.syncServerTime();
+      await this._api.syncServerTime()
 
       // Create event source for server-sent events
-      this._eventSource = this._api.createEventSource();
+      this._eventSource = this._api.createEventSource()
 
       // Set up event handlers
-      this._setupEventHandlers();
+      this._setupEventHandlers()
 
       // Get initial device info
-      const isConnected = await this._api.isConnected();
+      const isConnected = await this._api.isConnected()
       if (isConnected) {
-        this._deviceInfo = await this._api.getDeviceInfo();
-        this._connectionState = ConnectionState.CONNECTED;
-        this.emit("connectionStateChanged", this._connectionState);
-        this.emit("connected", this._deviceInfo);
+        this._deviceInfo = await this._api.getDeviceInfo()
+        this._connectionState = ConnectionState.CONNECTED
+        this.emit('connectionStateChanged', this._connectionState)
+        this.emit('connected', this._deviceInfo)
 
         // Get device settings after connection
-        await this._loadDeviceSettings();
+        await this._loadDeviceSettings()
 
-        return true;
+        return true
       } else {
-        this._connectionState = ConnectionState.DISCONNECTED;
-        this.emit("connectionStateChanged", this._connectionState);
-        this.emit("error", "Failed to connect to device");
-        return false;
+        this._connectionState = ConnectionState.DISCONNECTED
+        this.emit('connectionStateChanged', this._connectionState)
+        this.emit('error', 'Failed to connect to device')
+        return false
       }
     } catch (error) {
-      console.error("Handy: Error connecting to device:", error);
-      this._connectionState = ConnectionState.DISCONNECTED;
-      this.emit("connectionStateChanged", this._connectionState);
+      console.error('Handy: Error connecting to device:', error)
+      this._connectionState = ConnectionState.DISCONNECTED
+      this.emit('connectionStateChanged', this._connectionState)
       this.emit(
-        "error",
+        'error',
         `Connection error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return false;
+        }`,
+      )
+      return false
     }
   }
 
@@ -191,40 +191,40 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
     try {
       // Stop playback if active
       if (this._isPlaying) {
-        await this.stop();
+        await this.stop()
       }
 
       // Close event source
       if (this._eventSource) {
-        this._eventSource.close();
-        this._eventSource = null;
+        this._eventSource.close()
+        this._eventSource = null
       }
 
       // Update state immediately
-      this._connectionState = ConnectionState.DISCONNECTED;
-      this._deviceInfo = null;
-      this._isPlaying = false;
-      this._hspState = null;
-      this._scriptPrepared = false;
+      this._connectionState = ConnectionState.DISCONNECTED
+      this._deviceInfo = null
+      this._isPlaying = false
+      this._hspState = null
+      this._scriptPrepared = false
 
       // Emit events
-      this.emit("connectionStateChanged", this._connectionState);
-      this.emit("disconnected");
+      this.emit('connectionStateChanged', this._connectionState)
+      this.emit('disconnected')
 
-      return true;
+      return true
     } catch (error) {
-      console.error("Handy: Error disconnecting device:", error);
+      console.error('Handy: Error disconnecting device:', error)
 
       // Set disconnected state even in case of error
-      this._connectionState = ConnectionState.DISCONNECTED;
-      this._deviceInfo = null;
-      this._isPlaying = false;
+      this._connectionState = ConnectionState.DISCONNECTED
+      this._deviceInfo = null
+      this._isPlaying = false
 
       // Emit events
-      this.emit("connectionStateChanged", this._connectionState);
-      this.emit("disconnected");
+      this.emit('connectionStateChanged', this._connectionState)
+      this.emit('disconnected')
 
-      return true;
+      return true
     }
   }
 
@@ -232,7 +232,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    * Get current device configuration
    */
   getConfig(): HandySettings {
-    return { ...this._config };
+    return { ...this._config }
   }
 
   /**
@@ -242,39 +242,39 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   async updateConfig(config: Partial<HandySettings>): Promise<boolean> {
     // Update local config
     if (config.connectionKey !== undefined) {
-      this._config.connectionKey = config.connectionKey;
-      this._api.setConnectionKey(config.connectionKey);
+      this._config.connectionKey = config.connectionKey
+      this._api.setConnectionKey(config.connectionKey)
     }
 
     // Update offset if connected
     if (config.offset !== undefined && this.isConnected) {
-      this._config.offset = config.offset;
-      await this._api.setOffset(config.offset);
+      this._config.offset = config.offset
+      await this._api.setOffset(config.offset)
     } else if (config.offset !== undefined) {
-      this._config.offset = config.offset;
+      this._config.offset = config.offset
     }
 
     // Update stroke settings if connected
     if (config.stroke !== undefined && this.isConnected) {
-      this._config.stroke = { ...this._config.stroke, ...config.stroke };
-      await this._api.setStrokeSettings(this._config.stroke);
+      this._config.stroke = { ...this._config.stroke, ...config.stroke }
+      await this._api.setStrokeSettings(this._config.stroke)
     } else if (config.stroke !== undefined) {
-      this._config.stroke = { ...this._config.stroke, ...config.stroke };
+      this._config.stroke = { ...this._config.stroke, ...config.stroke }
     }
 
     // Update other fields if present
     if (config.name !== undefined) {
-      this._config.name = config.name;
+      this._config.name = config.name
     }
 
     if (config.enabled !== undefined) {
-      this._config.enabled = config.enabled;
+      this._config.enabled = config.enabled
     }
 
     // Emit configuration changed event
-    this.emit("configChanged", this._config);
+    this.emit('configChanged', this._config)
 
-    return true;
+    return true
   }
 
   /**
@@ -286,44 +286,44 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async prepareScript(funscript: Funscript): Promise<DeviceScriptLoadResult> {
     if (!this.isConnected) {
-      return { success: false, error: "Device not connected" };
+      return { success: false, error: 'Device not connected' }
     }
 
     try {
       // Convert funscript to blob and upload
       const blob = new Blob([JSON.stringify(funscript)], {
-        type: "application/json",
-      });
+        type: 'application/json',
+      })
 
-      const uploadedUrl = await this._api.uploadScript(blob);
+      const uploadedUrl = await this._api.uploadScript(blob)
       if (!uploadedUrl) {
         return {
           success: false,
-          error: "Failed to upload script to Handy server",
-        };
+          error: 'Failed to upload script to Handy server',
+        }
       }
 
       // Setup the script on the device
-      const success = await this._api.setupScript(uploadedUrl);
+      const success = await this._api.setupScript(uploadedUrl)
 
       if (success) {
-        this._scriptPrepared = true;
-        this.emit("scriptLoaded", {
+        this._scriptPrepared = true
+        this.emit('scriptLoaded', {
           url: uploadedUrl,
           actions: funscript.actions.length,
-        });
-        return { success: true };
+        })
+        return { success: true }
       } else {
-        return { success: false, error: "Failed to setup script on device" };
+        return { success: false, error: 'Failed to setup script on device' }
       }
     } catch (error) {
-      console.error("Handy: Error preparing script:", error);
+      console.error('Handy: Error preparing script:', error)
       return {
         success: false,
         error: `Script preparation error: ${
           error instanceof Error ? error.message : String(error)
         }`,
-      };
+      }
     }
   }
 
@@ -336,46 +336,46 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   async play(
     timeMs: number,
     playbackRate: number = 1.0,
-    loop: boolean = false
+    loop: boolean = false,
   ): Promise<boolean> {
     if (!this.isConnected) {
-      this.emit("error", "Cannot play: Device not connected");
-      return false;
+      this.emit('error', 'Cannot play: Device not connected')
+      return false
     }
 
     if (!this._scriptPrepared) {
-      this.emit("error", "Cannot play: No script prepared");
-      return false;
+      this.emit('error', 'Cannot play: No script prepared')
+      return false
     }
 
     try {
-      const hspState = await this._api.play(timeMs, playbackRate, loop);
+      const hspState = await this._api.play(timeMs, playbackRate, loop)
 
       if (hspState) {
         this._isPlaying =
-          hspState.play_state === 1 || hspState.play_state === "1";
+          hspState.play_state === 1 || hspState.play_state === '1'
 
-        this.emit("playbackStateChanged", {
+        this.emit('playbackStateChanged', {
           isPlaying: this._isPlaying,
           timeMs,
           playbackRate,
           loop,
-        });
+        })
 
-        return true;
+        return true
       } else {
-        this.emit("error", "Failed to start playback");
-        return false;
+        this.emit('error', 'Failed to start playback')
+        return false
       }
     } catch (error) {
-      console.error("Handy: Error playing script:", error);
+      console.error('Handy: Error playing script:', error)
       this.emit(
-        "error",
+        'error',
         `Playback error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return false;
+        }`,
+      )
+      return false
     }
   }
 
@@ -384,41 +384,41 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async stop(): Promise<boolean> {
     if (!this.isConnected) {
-      this.emit("error", "Cannot stop: Device not connected");
-      return false;
+      this.emit('error', 'Cannot stop: Device not connected')
+      return false
     }
 
     try {
       // Try HSP stop first, then HSSP stop
-      let hspState = await this._api.hspStop();
+      let hspState = await this._api.hspStop()
       if (!hspState) {
-        hspState = await this._api.stop();
+        hspState = await this._api.stop()
       }
 
       if (hspState) {
         this._isPlaying =
           hspState.play_state === HspPlayState.PLAYING ||
           hspState.play_state === 1 ||
-          hspState.play_state === "1";
+          hspState.play_state === '1'
 
-        this._hspState = hspState;
+        this._hspState = hspState
 
-        this.emit("playbackStateChanged", {
+        this.emit('playbackStateChanged', {
           isPlaying: this._isPlaying,
-        });
+        })
 
-        return true;
+        return true
       } else {
-        this.emit("error", "Failed to stop playback");
-        return false;
+        this.emit('error', 'Failed to stop playback')
+        return false
       }
     } catch (error) {
-      console.error("Handy: Error stopping:", error);
+      console.error('Handy: Error stopping:', error)
       this.emit(
-        "error",
-        `Stop error: ${error instanceof Error ? error.message : String(error)}`
-      );
-      return false;
+        'error',
+        `Stop error: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      return false
     }
   }
 
@@ -428,14 +428,14 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async syncTime(timeMs: number, filter: number = 0.5): Promise<boolean> {
     if (!this.isConnected || !this._isPlaying) {
-      return false;
+      return false
     }
 
     try {
-      return await this._api.syncVideoTime(timeMs, filter);
+      return await this._api.syncVideoTime(timeMs, filter)
     } catch (error) {
-      console.error("Handy: Error syncing time:", error);
-      return false;
+      console.error('Handy: Error syncing time:', error)
+      return false
     }
   }
 
@@ -443,7 +443,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    * Get device-specific information
    */
   getDeviceInfo(): DeviceInfo | null {
-    if (!this._deviceInfo) return null;
+    if (!this._deviceInfo) return null
 
     return {
       id: this.id,
@@ -453,7 +453,7 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
       hardware: this._deviceInfo.hw_model_name,
       sessionId: this._deviceInfo.session_id,
       ...this._deviceInfo,
-    };
+    }
   }
 
   // ============================================
@@ -467,27 +467,27 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspSetup(streamId?: number): Promise<HspState | null> {
     if (!this.isConnected) {
-      this.emit("error", "Cannot setup HSP: Device not connected");
-      return null;
+      this.emit('error', 'Cannot setup HSP: Device not connected')
+      return null
     }
 
     try {
-      const state = await this._api.hspSetup(streamId);
+      const state = await this._api.hspSetup(streamId)
       if (state) {
-        this._hspState = state;
-        this._hspStreamIndex = 0;
-        this.emit("hspStateChanged", state);
+        this._hspState = state
+        this._hspStreamIndex = 0
+        this.emit('hspStateChanged', state)
       }
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error setting up HSP:", error);
+      console.error('Handy: Error setting up HSP:', error)
       this.emit(
-        "error",
+        'error',
         `HSP setup error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return null;
+        }`,
+      )
+      return null
     }
   }
 
@@ -496,18 +496,18 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspGetState(): Promise<HspState | null> {
     if (!this.isConnected) {
-      return null;
+      return null
     }
 
     try {
-      const state = await this._api.hspGetState();
+      const state = await this._api.hspGetState()
       if (state) {
-        this._hspState = state;
+        this._hspState = state
       }
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error getting HSP state:", error);
-      return null;
+      console.error('Handy: Error getting HSP state:', error)
+      return null
     }
   }
 
@@ -522,38 +522,38 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspAddPoints(
     points: HspPoint[],
-    flush: boolean = false
+    flush: boolean = false,
   ): Promise<HspState | null> {
     if (!this.isConnected) {
-      this.emit("error", "Cannot add HSP points: Device not connected");
-      return null;
+      this.emit('error', 'Cannot add HSP points: Device not connected')
+      return null
     }
 
     try {
       // Update stream index
-      this._hspStreamIndex += points.length;
+      this._hspStreamIndex += points.length
 
       const state = await this._api.hspAddPoints(
         points,
         this._hspStreamIndex,
-        flush
-      );
+        flush,
+      )
 
       if (state) {
-        this._hspState = state;
-        this.emit("hspStateChanged", state);
+        this._hspState = state
+        this.emit('hspStateChanged', state)
       }
 
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error adding HSP points:", error);
+      console.error('Handy: Error adding HSP points:', error)
       this.emit(
-        "error",
+        'error',
         `HSP add points error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return null;
+        }`,
+      )
+      return null
     }
   }
 
@@ -565,45 +565,45 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
   async hspPlay(
     startTime: number = 0,
     options: {
-      playbackRate?: number;
-      pauseOnStarving?: boolean;
-      loop?: boolean;
-    } = {}
+      playbackRate?: number
+      pauseOnStarving?: boolean
+      loop?: boolean
+    } = {},
   ): Promise<HspState | null> {
     if (!this.isConnected) {
-      this.emit("error", "Cannot start HSP: Device not connected");
-      return null;
+      this.emit('error', 'Cannot start HSP: Device not connected')
+      return null
     }
 
     try {
-      const state = await this._api.hspPlay(startTime, options);
+      const state = await this._api.hspPlay(startTime, options)
 
       if (state) {
-        this._hspState = state;
+        this._hspState = state
         this._isPlaying =
           state.play_state === HspPlayState.PLAYING ||
           state.play_state === 1 ||
-          state.play_state === "1";
+          state.play_state === '1'
 
-        this.emit("hspStateChanged", state);
-        this.emit("playbackStateChanged", {
+        this.emit('hspStateChanged', state)
+        this.emit('playbackStateChanged', {
           isPlaying: this._isPlaying,
           timeMs: startTime,
           playbackRate: options.playbackRate ?? 1.0,
           loop: options.loop ?? false,
-        });
+        })
       }
 
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error starting HSP playback:", error);
+      console.error('Handy: Error starting HSP playback:', error)
       this.emit(
-        "error",
+        'error',
         `HSP play error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return null;
+        }`,
+      )
+      return null
     }
   }
 
@@ -612,23 +612,23 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspStop(): Promise<HspState | null> {
     if (!this.isConnected) {
-      return null;
+      return null
     }
 
     try {
-      const state = await this._api.hspStop();
+      const state = await this._api.hspStop()
 
       if (state) {
-        this._hspState = state;
-        this._isPlaying = false;
-        this.emit("hspStateChanged", state);
-        this.emit("playbackStateChanged", { isPlaying: false });
+        this._hspState = state
+        this._isPlaying = false
+        this.emit('hspStateChanged', state)
+        this.emit('playbackStateChanged', { isPlaying: false })
       }
 
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error stopping HSP:", error);
-      return null;
+      console.error('Handy: Error stopping HSP:', error)
+      return null
     }
   }
 
@@ -637,23 +637,23 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspPause(): Promise<HspState | null> {
     if (!this.isConnected) {
-      return null;
+      return null
     }
 
     try {
-      const state = await this._api.hspPause();
+      const state = await this._api.hspPause()
 
       if (state) {
-        this._hspState = state;
-        this._isPlaying = false;
-        this.emit("hspStateChanged", state);
-        this.emit("playbackStateChanged", { isPlaying: false });
+        this._hspState = state
+        this._isPlaying = false
+        this.emit('hspStateChanged', state)
+        this.emit('playbackStateChanged', { isPlaying: false })
       }
 
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error pausing HSP:", error);
-      return null;
+      console.error('Handy: Error pausing HSP:', error)
+      return null
     }
   }
 
@@ -663,27 +663,27 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspResume(pickUp: boolean = false): Promise<HspState | null> {
     if (!this.isConnected) {
-      return null;
+      return null
     }
 
     try {
-      const state = await this._api.hspResume(pickUp);
+      const state = await this._api.hspResume(pickUp)
 
       if (state) {
-        this._hspState = state;
+        this._hspState = state
         this._isPlaying =
           state.play_state === HspPlayState.PLAYING ||
           state.play_state === 1 ||
-          state.play_state === "1";
+          state.play_state === '1'
 
-        this.emit("hspStateChanged", state);
-        this.emit("playbackStateChanged", { isPlaying: this._isPlaying });
+        this.emit('hspStateChanged', state)
+        this.emit('playbackStateChanged', { isPlaying: this._isPlaying })
       }
 
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error resuming HSP:", error);
-      return null;
+      console.error('Handy: Error resuming HSP:', error)
+      return null
     }
   }
 
@@ -692,22 +692,22 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspFlush(): Promise<HspState | null> {
     if (!this.isConnected) {
-      return null;
+      return null
     }
 
     try {
-      const state = await this._api.hspFlush();
+      const state = await this._api.hspFlush()
 
       if (state) {
-        this._hspState = state;
-        this._hspStreamIndex = 0;
-        this.emit("hspStateChanged", state);
+        this._hspState = state
+        this._hspStreamIndex = 0
+        this.emit('hspStateChanged', state)
       }
 
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error flushing HSP:", error);
-      return null;
+      console.error('Handy: Error flushing HSP:', error)
+      return null
     }
   }
 
@@ -716,19 +716,19 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspSetLoop(loop: boolean): Promise<HspState | null> {
     if (!this.isConnected) {
-      return null;
+      return null
     }
 
     try {
-      const state = await this._api.hspSetLoop(loop);
+      const state = await this._api.hspSetLoop(loop)
       if (state) {
-        this._hspState = state;
-        this.emit("hspStateChanged", state);
+        this._hspState = state
+        this.emit('hspStateChanged', state)
       }
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error setting HSP loop:", error);
-      return null;
+      console.error('Handy: Error setting HSP loop:', error)
+      return null
     }
   }
 
@@ -737,19 +737,19 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspSetPlaybackRate(rate: number): Promise<HspState | null> {
     if (!this.isConnected) {
-      return null;
+      return null
     }
 
     try {
-      const state = await this._api.hspSetPlaybackRate(rate);
+      const state = await this._api.hspSetPlaybackRate(rate)
       if (state) {
-        this._hspState = state;
-        this.emit("hspStateChanged", state);
+        this._hspState = state
+        this.emit('hspStateChanged', state)
       }
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error setting HSP playback rate:", error);
-      return null;
+      console.error('Handy: Error setting HSP playback rate:', error)
+      return null
     }
   }
 
@@ -758,22 +758,22 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspSyncTime(
     currentTime: number,
-    filter: number = 0.5
+    filter: number = 0.5,
   ): Promise<HspState | null> {
     if (!this.isConnected || !this._isPlaying) {
-      return null;
+      return null
     }
 
     try {
-      const state = await this._api.hspSyncTime(currentTime, filter);
+      const state = await this._api.hspSyncTime(currentTime, filter)
       if (state) {
-        this._hspState = state;
-        this.emit("hspStateChanged", state);
+        this._hspState = state
+        this.emit('hspStateChanged', state)
       }
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error syncing HSP time:", error);
-      return null;
+      console.error('Handy: Error syncing HSP time:', error)
+      return null
     }
   }
 
@@ -783,19 +783,19 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    */
   async hspSetPauseOnStarving(pause: boolean): Promise<HspState | null> {
     if (!this.isConnected) {
-      return null;
+      return null
     }
 
     try {
-      const state = await this._api.hspSetPauseOnStarving(pause);
+      const state = await this._api.hspSetPauseOnStarving(pause)
       if (state) {
-        this._hspState = state;
-        this.emit("hspStateChanged", state);
+        this._hspState = state
+        this.emit('hspStateChanged', state)
       }
-      return state;
+      return state
     } catch (error) {
-      console.error("Handy: Error setting pause on starving:", error);
-      return null;
+      console.error('Handy: Error setting pause on starving:', error)
+      return null
     }
   }
 
@@ -803,14 +803,14 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    * Get the current stream index for tracking
    */
   getHspStreamIndex(): number {
-    return this._hspStreamIndex;
+    return this._hspStreamIndex
   }
 
   /**
    * Reset the stream index (call after hspSetup)
    */
   resetHspStreamIndex(): void {
-    this._hspStreamIndex = 0;
+    this._hspStreamIndex = 0
   }
 
   // ============================================
@@ -821,110 +821,110 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
    * Set up event handlers for the device
    */
   private _setupEventHandlers(): void {
-    if (!this._eventSource) return;
+    if (!this._eventSource) return
 
     this._eventSource.onerror = (error) => {
-      console.error("EventSource error:", error);
-      this.emit("error", "Connection to device lost");
-    };
+      console.error('EventSource error:', error)
+      this.emit('error', 'Connection to device lost')
+    }
 
-    this._eventSource.addEventListener("device_status", (event) => {
-      const data = JSON.parse(event.data);
-      this._deviceInfo = data.data.info;
-      const connected = data.data.connected;
+    this._eventSource.addEventListener('device_status', (event) => {
+      const data = JSON.parse(event.data)
+      this._deviceInfo = data.data.info
+      const connected = data.data.connected
 
       if (connected && this._connectionState !== ConnectionState.CONNECTED) {
-        this._connectionState = ConnectionState.CONNECTED;
-        this.emit("connectionStateChanged", this._connectionState);
-        this.emit("connected", this._deviceInfo);
+        this._connectionState = ConnectionState.CONNECTED
+        this.emit('connectionStateChanged', this._connectionState)
+        this.emit('connected', this._deviceInfo)
       } else if (
         !connected &&
         this._connectionState === ConnectionState.CONNECTED
       ) {
-        this._connectionState = ConnectionState.DISCONNECTED;
-        this.emit("connectionStateChanged", this._connectionState);
-        this.emit("disconnected");
+        this._connectionState = ConnectionState.DISCONNECTED
+        this.emit('connectionStateChanged', this._connectionState)
+        this.emit('disconnected')
       }
-    });
+    })
 
-    this._eventSource.addEventListener("device_connected", (event) => {
-      const data = JSON.parse(event.data);
-      this._deviceInfo = data.data.info;
-      this._connectionState = ConnectionState.CONNECTED;
-      this.emit("connectionStateChanged", this._connectionState);
-      this.emit("connected", this._deviceInfo);
-    });
+    this._eventSource.addEventListener('device_connected', (event) => {
+      const data = JSON.parse(event.data)
+      this._deviceInfo = data.data.info
+      this._connectionState = ConnectionState.CONNECTED
+      this.emit('connectionStateChanged', this._connectionState)
+      this.emit('connected', this._deviceInfo)
+    })
 
-    this._eventSource.addEventListener("device_disconnected", () => {
-      this._connectionState = ConnectionState.DISCONNECTED;
-      this.emit("connectionStateChanged", this._connectionState);
-      this.emit("disconnected");
-    });
+    this._eventSource.addEventListener('device_disconnected', () => {
+      this._connectionState = ConnectionState.DISCONNECTED
+      this.emit('connectionStateChanged', this._connectionState)
+      this.emit('disconnected')
+    })
 
-    this._eventSource.addEventListener("mode_changed", () => {
-      this._isPlaying = false;
-      this.emit("playbackStateChanged", { isPlaying: false });
-    });
+    this._eventSource.addEventListener('mode_changed', () => {
+      this._isPlaying = false
+      this.emit('playbackStateChanged', { isPlaying: false })
+    })
 
     // HSP-specific events
-    this._eventSource.addEventListener("hsp_state_changed", (event) => {
-      const data = JSON.parse(event.data);
-      const state = data.data?.data as HspState;
+    this._eventSource.addEventListener('hsp_state_changed', (event) => {
+      const data = JSON.parse(event.data)
+      const state = data.data?.data as HspState
 
       if (state) {
-        this._hspState = state;
+        this._hspState = state
         this._isPlaying =
           state.play_state === HspPlayState.PLAYING ||
           state.play_state === 1 ||
-          state.play_state === "1";
+          state.play_state === '1'
 
-        this.emit("hspStateChanged", state);
-        this.emit("playbackStateChanged", { isPlaying: this._isPlaying });
+        this.emit('hspStateChanged', state)
+        this.emit('playbackStateChanged', { isPlaying: this._isPlaying })
       }
-    });
+    })
 
-    this._eventSource.addEventListener("hsp_starving", (event) => {
-      const data = JSON.parse(event.data);
-      this.emit("hspStarving", data.data?.data);
-    });
+    this._eventSource.addEventListener('hsp_starving', (event) => {
+      const data = JSON.parse(event.data)
+      this.emit('hspStarving', data.data?.data)
+    })
 
-    this._eventSource.addEventListener("hsp_threshold_reached", (event) => {
-      const data = JSON.parse(event.data);
-      this.emit("hspThresholdReached", data.data?.data);
-    });
+    this._eventSource.addEventListener('hsp_threshold_reached', (event) => {
+      const data = JSON.parse(event.data)
+      this.emit('hspThresholdReached', data.data?.data)
+    })
 
-    this._eventSource.addEventListener("hsp_looping", (event) => {
-      const data = JSON.parse(event.data);
-      this.emit("hspLooping", data.data?.data);
-    });
+    this._eventSource.addEventListener('hsp_looping', (event) => {
+      const data = JSON.parse(event.data)
+      this.emit('hspLooping', data.data?.data)
+    })
   }
 
   /**
    * Load device settings after connection
    */
   private async _loadDeviceSettings(): Promise<void> {
-    if (!this.isConnected) return;
+    if (!this.isConnected) return
 
     try {
       // Get device offset
-      const offset = await this._api.getOffset();
+      const offset = await this._api.getOffset()
       if (offset !== undefined) {
-        this._config.offset = offset;
+        this._config.offset = offset
       }
 
       // Get stroke settings
-      const strokeSettings = await this._api.getStrokeSettings();
+      const strokeSettings = await this._api.getStrokeSettings()
       if (strokeSettings) {
         this._config.stroke = {
           min: strokeSettings.min,
           max: strokeSettings.max,
-        };
+        }
       }
 
       // Emit config updated event
-      this.emit("configChanged", this._config);
+      this.emit('configChanged', this._config)
     } catch (error) {
-      console.error("Handy: Error loading device settings:", error);
+      console.error('Handy: Error loading device settings:', error)
     }
   }
 }

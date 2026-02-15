@@ -3,8 +3,8 @@
  *
  * Utility functions for converting script commands to Buttplug device commands
  */
-import { ButtplugApi } from "./buttplug-api";
-import { ButtplugDeviceInfo, DevicePreference } from "./types";
+import { ButtplugApi } from './buttplug-api'
+import { ButtplugDeviceInfo, DevicePreference } from './types'
 
 /**
  * Convert script position (0-100) to device position (0.0-1.0)
@@ -13,18 +13,18 @@ export function convertScriptPositionToDevicePosition(
   scriptPos: number,
   strokeMin: number = 0.0,
   strokeMax: number = 1.0,
-  invert: boolean = false
+  invert: boolean = false,
 ): number {
   // Normalize scriptPos to 0.0-1.0 range
-  let normalized = Math.min(1, Math.max(0, scriptPos / 100));
+  let normalized = Math.min(1, Math.max(0, scriptPos / 100))
 
   // Apply script inversion first if enabled
   if (invert) {
-    normalized = 1.0 - normalized;
+    normalized = 1.0 - normalized
   }
 
   // Scale to stroke range
-  return strokeMin + normalized * (strokeMax - strokeMin);
+  return strokeMin + normalized * (strokeMax - strokeMin)
 }
 
 /**
@@ -34,14 +34,14 @@ export function createDeviceCommandExecutor(
   api: ButtplugApi,
   deviceInfo: ButtplugDeviceInfo,
   preferences: DevicePreference,
-  invertScript: boolean = false
+  invertScript: boolean = false,
 ): {
   executeAction: (
     pos: number,
     prevPos: number,
     durationMs: number,
-    strokeRange?: { min: number; max: number }
-  ) => Promise<void>;
+    strokeRange?: { min: number; max: number },
+  ) => Promise<void>
 } {
   // If device is disabled, return a no-op executor
   if (!preferences.enabled) {
@@ -49,18 +49,18 @@ export function createDeviceCommandExecutor(
       executeAction: async () => {
         /* No-op */
       },
-    };
+    }
   }
 
   // Track last position to detect unchanged positions
-  let lastPos = -1;
+  let lastPos = -1
 
   return {
     executeAction: async (
       pos: number,
       prevPos: number,
       durationMs: number,
-      strokeRange = { min: 0, max: 1 }
+      strokeRange = { min: 0, max: 1 },
     ) => {
       try {
         // Convert position to device range with stroke range applied
@@ -68,63 +68,63 @@ export function createDeviceCommandExecutor(
           pos,
           strokeRange.min,
           strokeRange.max,
-          invertScript
-        );
+          invertScript,
+        )
 
         // Apply device-specific intensity scaling if configured
         const intensity =
-          preferences.intensity !== undefined ? preferences.intensity : 1.0;
+          preferences.intensity !== undefined ? preferences.intensity : 1.0
 
         // For vibration and rotation: based on position directly
         // If position hasn't changed from last position, set to 0
-        let speed = Math.min(1.0, Math.max(0, pos / 100)) * intensity;
+        let speed = Math.min(1.0, Math.max(0, pos / 100)) * intensity
 
         // If position hasn't changed, set speed to 0
         if (Math.abs(pos - lastPos) < 0.00001 && lastPos >= 0) {
-          speed = 0;
+          speed = 0
         }
 
         // Save position for next time
-        lastPos = pos;
+        lastPos = pos
 
         console.log(`Device ${deviceInfo.name} command:`, {
           speed,
           position,
           durationMs,
           strokeRange,
-        });
+        })
 
         // Send appropriate commands based on device capabilities and preferences
         if (preferences.useLinear) {
-          await api.linearDevice(deviceInfo.index, position, durationMs);
+          await api.linearDevice(deviceInfo.index, position, durationMs)
         }
 
         if (preferences.useVibrate) {
           await api.vibrateDevice(
             deviceInfo.index,
-            invertScript ? 1 - speed : speed
-          );
+            invertScript ? 1 - speed : speed,
+          )
         }
 
         if (preferences.useRotate) {
           await api.rotateDevice(
             deviceInfo.index,
             speed,
-            invertScript ? false : true
-          );
+            invertScript ? false : true,
+          )
         }
 
         if (preferences.useOscillate) {
-          await api.oscillateDevice(deviceInfo.index, speed, durationMs);
+          await api.oscillateDevice(deviceInfo.index, speed, durationMs)
         }
       } catch (error) {
         console.error(
           `Error executing command for device ${deviceInfo.name}:`,
-          error
-        );
+          error,
+        )
       }
     },
-  };
+  }
 }
 
 /**
@@ -134,30 +134,30 @@ export function createMultiDeviceCommandExecutor(
   api: ButtplugApi,
   devices: ButtplugDeviceInfo[],
   preferences: Map<number, DevicePreference>,
-  invertScript: boolean = false
+  invertScript: boolean = false,
 ): {
   executeAction: (
     pos: number,
     prevPos: number,
     durationMs: number,
-    strokeRange?: { min: number; max: number }
-  ) => Promise<void>;
+    strokeRange?: { min: number; max: number },
+  ) => Promise<void>
 } {
   // Create executors for all enabled devices
   const deviceExecutors = devices
     .filter((device) => {
-      const devicePrefs = preferences.get(device.index);
-      return devicePrefs && devicePrefs.enabled;
+      const devicePrefs = preferences.get(device.index)
+      return devicePrefs && devicePrefs.enabled
     })
     .map((device) => {
-      const devicePrefs = preferences.get(device.index);
+      const devicePrefs = preferences.get(device.index)
       return createDeviceCommandExecutor(
         api,
         device,
         devicePrefs!,
-        invertScript
-      );
-    });
+        invertScript,
+      )
+    })
 
   // Create a combined executor that will send commands to all devices
   return {
@@ -165,14 +165,14 @@ export function createMultiDeviceCommandExecutor(
       pos: number,
       prevPos: number,
       durationMs: number,
-      strokeRange = { min: 0, max: 1 }
+      strokeRange = { min: 0, max: 1 },
     ) => {
       // Execute on all devices in parallel
       await Promise.all(
         deviceExecutors.map((executor) =>
-          executor.executeAction(pos, prevPos, durationMs, strokeRange)
-        )
-      );
+          executor.executeAction(pos, prevPos, durationMs, strokeRange),
+        ),
+      )
     },
-  };
+  }
 }

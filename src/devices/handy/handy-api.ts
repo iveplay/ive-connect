@@ -13,61 +13,61 @@ import {
   ApiResponse,
   OffsetResponse,
   StrokeSettings,
-} from "./types";
+} from './types'
 
 export class HandyApi {
-  private readonly baseV3Url: string;
-  private readonly baseV2Url: string;
-  private readonly applicationId: string;
-  private connectionKey: string;
-  private serverTimeOffset = 0;
-  private _eventSource: EventSource | null = null;
+  private readonly baseV3Url: string
+  private readonly baseV2Url: string
+  private readonly applicationId: string
+  private connectionKey: string
+  private serverTimeOffset = 0
+  private _eventSource: EventSource | null = null
 
   constructor(
     baseV3Url: string,
     baseV2Url: string,
     applicationId: string,
-    connectionKey = ""
+    connectionKey = '',
   ) {
-    this.baseV3Url = baseV3Url;
-    this.baseV2Url = baseV2Url;
-    this.applicationId = applicationId;
-    this.connectionKey = connectionKey;
+    this.baseV3Url = baseV3Url
+    this.baseV2Url = baseV2Url
+    this.applicationId = applicationId
+    this.connectionKey = connectionKey
   }
 
   /**
    * Set the connection key for API requests
    */
   public setConnectionKey(connectionKey: string): void {
-    this.connectionKey = connectionKey;
+    this.connectionKey = connectionKey
   }
 
   /**
    * Get the connection key
    */
   public getConnectionKey(): string {
-    return this.connectionKey;
+    return this.connectionKey
   }
 
   /**
    * Set the server time offset for synchronization
    */
   public setServerTimeOffset(offset: number): void {
-    this.serverTimeOffset = offset;
+    this.serverTimeOffset = offset
   }
 
   /**
    * Get the server time offset
    */
   public getServerTimeOffset(): number {
-    return this.serverTimeOffset;
+    return this.serverTimeOffset
   }
 
   /**
    * Estimate the current server time based on local time and offset
    */
   public estimateServerTime(): number {
-    return Math.round(Date.now() + this.serverTimeOffset);
+    return Math.round(Date.now() + this.serverTimeOffset)
   }
 
   /**
@@ -75,11 +75,11 @@ export class HandyApi {
    */
   private getHeaders(): HeadersInit {
     return {
-      "X-Connection-Key": this.connectionKey,
+      'X-Connection-Key': this.connectionKey,
       Authorization: `Bearer ${this.applicationId}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    }
   }
 
   /**
@@ -88,23 +88,23 @@ export class HandyApi {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    useV2 = false
+    useV2 = false,
   ): Promise<ApiResponse<T>> {
     try {
-      const baseUrl = useV2 ? this.baseV2Url : this.baseV3Url;
+      const baseUrl = useV2 ? this.baseV2Url : this.baseV3Url
       const response = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
         headers: {
           ...this.getHeaders(),
           ...options.headers,
         },
-      });
+      })
 
-      const data = await response.json();
-      return data as ApiResponse<T>;
+      const data = await response.json()
+      return data as ApiResponse<T>
     } catch (error) {
-      console.error(`API error (${endpoint}):`, error);
-      throw error;
+      console.error(`API error (${endpoint}):`, error)
+      throw error
     }
   }
 
@@ -113,11 +113,11 @@ export class HandyApi {
    */
   public async isConnected(): Promise<boolean> {
     try {
-      const response = await this.request<{ connected: boolean }>("/connected");
-      return !!response.result?.connected;
+      const response = await this.request<{ connected: boolean }>('/connected')
+      return !!response.result?.connected
     } catch (error) {
-      console.error("Handy: Error checking connection:", error);
-      return false;
+      console.error('Handy: Error checking connection:', error)
+      return false
     }
   }
 
@@ -126,11 +126,11 @@ export class HandyApi {
    */
   public async getDeviceInfo(): Promise<HandyDeviceInfo | null> {
     try {
-      const response = await this.request<HandyDeviceInfo>("/info");
-      return response.result || null;
+      const response = await this.request<HandyDeviceInfo>('/info')
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error getting device info:", error);
-      return null;
+      console.error('Handy: Error getting device info:', error)
+      return null
     }
   }
 
@@ -139,11 +139,11 @@ export class HandyApi {
    */
   public async getMode(): Promise<number | null> {
     try {
-      const response = await this.request<{ mode: number }>("/mode");
-      return response.result?.mode ?? null;
+      const response = await this.request<{ mode: number }>('/mode')
+      return response.result?.mode ?? null
     } catch (error) {
-      console.error("Handy: Error getting mode:", error);
-      return null;
+      console.error('Handy: Error getting mode:', error)
+      return null
     }
   }
 
@@ -157,25 +157,25 @@ export class HandyApi {
       const file =
         scriptFile instanceof File
           ? scriptFile
-          : new File([scriptFile], "script.funscript", {
-              type: "application/json",
-            });
+          : new File([scriptFile], 'script.funscript', {
+              type: 'application/json',
+            })
 
-      const formData = new FormData();
-      formData.append("file", file);
+      const formData = new FormData()
+      formData.append('file', file)
 
       const response = await fetch(`${this.baseV2Url}/upload`, {
-        method: "POST",
+        method: 'POST',
         body: formData,
-        mode: "cors",
-        credentials: "omit",
-      });
+        mode: 'cors',
+        credentials: 'omit',
+      })
 
-      const data = (await response.json()) as { url: string };
-      return data.url || null;
+      const data = (await response.json()) as { url: string }
+      return data.url || null
     } catch (error) {
-      console.error("Handy: Error uploading script:", error);
-      return null;
+      console.error('Handy: Error uploading script:', error)
+      return null
     }
   }
 
@@ -188,14 +188,14 @@ export class HandyApi {
    */
   public async setupScript(scriptUrl: string): Promise<boolean> {
     try {
-      const response = await this.request<HspState>("/hssp/setup", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hssp/setup', {
+        method: 'PUT',
         body: JSON.stringify({ url: scriptUrl }),
-      });
-      return !!response.result?.stream_id;
+      })
+      return !!response.result?.stream_id
     } catch (error) {
-      console.error("Handy: Error setting up script:", error);
-      return false;
+      console.error('Handy: Error setting up script:', error)
+      return false
     }
   }
 
@@ -205,22 +205,22 @@ export class HandyApi {
   public async play(
     videoTime: number,
     playbackRate = 1.0,
-    loop = false
+    loop = false,
   ): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hssp/play", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hssp/play', {
+        method: 'PUT',
         body: JSON.stringify({
           start_time: Math.round(videoTime),
           server_time: this.estimateServerTime(),
           playback_rate: playbackRate,
           loop,
         }),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error starting playback:", error);
-      return null;
+      console.error('Handy: Error starting playback:', error)
+      return null
     }
   }
 
@@ -229,13 +229,13 @@ export class HandyApi {
    */
   public async stop(): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hssp/stop", {
-        method: "PUT",
-      });
-      return response.result || null;
+      const response = await this.request<HspState>('/hssp/stop', {
+        method: 'PUT',
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error stopping playback:", error);
-      return null;
+      console.error('Handy: Error stopping playback:', error)
+      return null
     }
   }
 
@@ -244,21 +244,21 @@ export class HandyApi {
    */
   public async syncVideoTime(
     videoTime: number,
-    filter = 0.5
+    filter = 0.5,
   ): Promise<boolean> {
     try {
-      const response = await this.request<HspState>("/hssp/synctime", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hssp/synctime', {
+        method: 'PUT',
         body: JSON.stringify({
           current_time: Math.round(videoTime),
           server_time: this.estimateServerTime(),
           filter,
         }),
-      });
-      return !!response.result?.stream_id;
+      })
+      return !!response.result?.stream_id
     } catch (error) {
-      console.error("Handy: Error syncing video time:", error);
-      return false;
+      console.error('Handy: Error syncing video time:', error)
+      return false
     }
   }
 
@@ -273,15 +273,15 @@ export class HandyApi {
    */
   public async hspSetup(streamId?: number): Promise<HspState | null> {
     try {
-      const body = streamId ? { stream_id: streamId } : {};
-      const response = await this.request<HspState>("/hsp/setup", {
-        method: "PUT",
+      const body = streamId ? { stream_id: streamId } : {}
+      const response = await this.request<HspState>('/hsp/setup', {
+        method: 'PUT',
         body: JSON.stringify(body),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error setting up HSP:", error);
-      return null;
+      console.error('Handy: Error setting up HSP:', error)
+      return null
     }
   }
 
@@ -290,11 +290,11 @@ export class HandyApi {
    */
   public async hspGetState(): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/state");
-      return response.result || null;
+      const response = await this.request<HspState>('/hsp/state')
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error getting HSP state:", error);
-      return null;
+      console.error('Handy: Error getting HSP state:', error)
+      return null
     }
   }
 
@@ -310,27 +310,27 @@ export class HandyApi {
     points: HspPoint[],
     tailPointStreamIndex: number,
     flush: boolean = false,
-    tailPointThreshold?: number
+    tailPointThreshold?: number,
   ): Promise<HspState | null> {
     try {
       const body: HspAddRequest = {
         points,
         tail_point_stream_index: tailPointStreamIndex,
         flush,
-      };
-
-      if (tailPointThreshold !== undefined) {
-        body.tail_point_threshold = tailPointThreshold;
       }
 
-      const response = await this.request<HspState>("/hsp/add", {
-        method: "PUT",
+      if (tailPointThreshold !== undefined) {
+        body.tail_point_threshold = tailPointThreshold
+      }
+
+      const response = await this.request<HspState>('/hsp/add', {
+        method: 'PUT',
         body: JSON.stringify(body),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error adding HSP points:", error);
-      return null;
+      console.error('Handy: Error adding HSP points:', error)
+      return null
     }
   }
 
@@ -342,40 +342,40 @@ export class HandyApi {
   public async hspPlay(
     startTime: number,
     options: {
-      serverTime?: number;
-      playbackRate?: number;
-      pauseOnStarving?: boolean;
-      loop?: boolean;
-      addPoints?: HspAddRequest;
-    } = {}
+      serverTime?: number
+      playbackRate?: number
+      pauseOnStarving?: boolean
+      loop?: boolean
+      addPoints?: HspAddRequest
+    } = {},
   ): Promise<HspState | null> {
     try {
       const body: HspPlayRequest = {
         start_time: Math.round(startTime),
         server_time: options.serverTime ?? this.estimateServerTime(),
-      };
+      }
 
       if (options.playbackRate !== undefined) {
-        body.playback_rate = options.playbackRate;
+        body.playback_rate = options.playbackRate
       }
       if (options.pauseOnStarving !== undefined) {
-        body.pause_on_starving = options.pauseOnStarving;
+        body.pause_on_starving = options.pauseOnStarving
       }
       if (options.loop !== undefined) {
-        body.loop = options.loop;
+        body.loop = options.loop
       }
       if (options.addPoints) {
-        body.add = options.addPoints;
+        body.add = options.addPoints
       }
 
-      const response = await this.request<HspState>("/hsp/play", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hsp/play', {
+        method: 'PUT',
         body: JSON.stringify(body),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error starting HSP playback:", error);
-      return null;
+      console.error('Handy: Error starting HSP playback:', error)
+      return null
     }
   }
 
@@ -384,13 +384,13 @@ export class HandyApi {
    */
   public async hspStop(): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/stop", {
-        method: "PUT",
-      });
-      return response.result || null;
+      const response = await this.request<HspState>('/hsp/stop', {
+        method: 'PUT',
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error stopping HSP:", error);
-      return null;
+      console.error('Handy: Error stopping HSP:', error)
+      return null
     }
   }
 
@@ -399,13 +399,13 @@ export class HandyApi {
    */
   public async hspPause(): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/pause", {
-        method: "PUT",
-      });
-      return response.result || null;
+      const response = await this.request<HspState>('/hsp/pause', {
+        method: 'PUT',
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error pausing HSP:", error);
-      return null;
+      console.error('Handy: Error pausing HSP:', error)
+      return null
     }
   }
 
@@ -415,14 +415,14 @@ export class HandyApi {
    */
   public async hspResume(pickUp: boolean = false): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/resume", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hsp/resume', {
+        method: 'PUT',
         body: JSON.stringify({ pick_up: pickUp }),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error resuming HSP:", error);
-      return null;
+      console.error('Handy: Error resuming HSP:', error)
+      return null
     }
   }
 
@@ -431,13 +431,13 @@ export class HandyApi {
    */
   public async hspFlush(): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/flush", {
-        method: "PUT",
-      });
-      return response.result || null;
+      const response = await this.request<HspState>('/hsp/flush', {
+        method: 'PUT',
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error flushing HSP buffer:", error);
-      return null;
+      console.error('Handy: Error flushing HSP buffer:', error)
+      return null
     }
   }
 
@@ -446,14 +446,14 @@ export class HandyApi {
    */
   public async hspSetLoop(loop: boolean): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/loop", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hsp/loop', {
+        method: 'PUT',
         body: JSON.stringify({ loop }),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error setting HSP loop:", error);
-      return null;
+      console.error('Handy: Error setting HSP loop:', error)
+      return null
     }
   }
 
@@ -461,17 +461,17 @@ export class HandyApi {
    * Set the HSP playback rate
    */
   public async hspSetPlaybackRate(
-    playbackRate: number
+    playbackRate: number,
   ): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/playbackrate", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hsp/playbackrate', {
+        method: 'PUT',
         body: JSON.stringify({ playback_rate: playbackRate }),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error setting HSP playback rate:", error);
-      return null;
+      console.error('Handy: Error setting HSP playback rate:', error)
+      return null
     }
   }
 
@@ -480,14 +480,14 @@ export class HandyApi {
    */
   public async hspSetThreshold(threshold: number): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/threshold", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hsp/threshold', {
+        method: 'PUT',
         body: JSON.stringify({ tail_point_threshold: threshold }),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error setting HSP threshold:", error);
-      return null;
+      console.error('Handy: Error setting HSP threshold:', error)
+      return null
     }
   }
 
@@ -495,17 +495,17 @@ export class HandyApi {
    * Set the HSP pause-on-starving flag
    */
   public async hspSetPauseOnStarving(
-    pauseOnStarving: boolean
+    pauseOnStarving: boolean,
   ): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/pause/onstarving", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hsp/pause/onstarving', {
+        method: 'PUT',
         body: JSON.stringify({ pause_on_starving: pauseOnStarving }),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error setting HSP pause on starving:", error);
-      return null;
+      console.error('Handy: Error setting HSP pause on starving:', error)
+      return null
     }
   }
 
@@ -516,21 +516,21 @@ export class HandyApi {
    */
   public async hspSyncTime(
     currentTime: number,
-    filter: number = 0.5
+    filter: number = 0.5,
   ): Promise<HspState | null> {
     try {
-      const response = await this.request<HspState>("/hsp/synctime", {
-        method: "PUT",
+      const response = await this.request<HspState>('/hsp/synctime', {
+        method: 'PUT',
         body: JSON.stringify({
           current_time: Math.round(currentTime),
           server_time: this.estimateServerTime(),
           filter,
         }),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error syncing HSP time:", error);
-      return null;
+      console.error('Handy: Error syncing HSP time:', error)
+      return null
     }
   }
 
@@ -543,11 +543,11 @@ export class HandyApi {
    */
   public async getOffset(): Promise<number> {
     try {
-      const response = await this.request<OffsetResponse>("/hstp/offset");
-      return response.result?.offset || 0;
+      const response = await this.request<OffsetResponse>('/hstp/offset')
+      return response.result?.offset || 0
     } catch (error) {
-      console.error("Handy: Error getting offset:", error);
-      return 0;
+      console.error('Handy: Error getting offset:', error)
+      return 0
     }
   }
 
@@ -556,14 +556,14 @@ export class HandyApi {
    */
   public async setOffset(offset: number): Promise<boolean> {
     try {
-      const response = await this.request<string>("/hstp/offset", {
-        method: "PUT",
+      const response = await this.request<string>('/hstp/offset', {
+        method: 'PUT',
         body: JSON.stringify({ offset }),
-      });
-      return response.result === "ok";
+      })
+      return response.result === 'ok'
     } catch (error) {
-      console.error("Handy: Error setting offset:", error);
-      return false;
+      console.error('Handy: Error setting offset:', error)
+      return false
     }
   }
 
@@ -572,11 +572,11 @@ export class HandyApi {
    */
   public async getDeviceTimeInfo(): Promise<HandyTimeInfo | null> {
     try {
-      const response = await this.request<HandyTimeInfo>("/hstp/info");
-      return response.result || null;
+      const response = await this.request<HandyTimeInfo>('/hstp/info')
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error getting device time info:", error);
-      return null;
+      console.error('Handy: Error getting device time info:', error)
+      return null
     }
   }
 
@@ -584,16 +584,16 @@ export class HandyApi {
    * Trigger a server-device clock synchronization
    */
   public async clockSync(
-    synchronous: boolean = true
+    synchronous: boolean = true,
   ): Promise<HandyTimeInfo | null> {
     try {
       const response = await this.request<HandyTimeInfo>(
-        `/hstp/clocksync?s=${synchronous}`
-      );
-      return response.result || null;
+        `/hstp/clocksync?s=${synchronous}`,
+      )
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error triggering clock sync:", error);
-      return null;
+      console.error('Handy: Error triggering clock sync:', error)
+      return null
     }
   }
 
@@ -606,11 +606,11 @@ export class HandyApi {
    */
   public async getStrokeSettings(): Promise<StrokeSettings | null> {
     try {
-      const response = await this.request<StrokeSettings>("/slider/stroke");
-      return response.result || null;
+      const response = await this.request<StrokeSettings>('/slider/stroke')
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error getting stroke settings:", error);
-      return null;
+      console.error('Handy: Error getting stroke settings:', error)
+      return null
     }
   }
 
@@ -618,18 +618,18 @@ export class HandyApi {
    * Set the stroke settings
    */
   public async setStrokeSettings(settings: {
-    min: number;
-    max: number;
+    min: number
+    max: number
   }): Promise<StrokeSettings | null> {
     try {
-      const response = await this.request<StrokeSettings>("/slider/stroke", {
-        method: "PUT",
+      const response = await this.request<StrokeSettings>('/slider/stroke', {
+        method: 'PUT',
         body: JSON.stringify(settings),
-      });
-      return response.result || null;
+      })
+      return response.result || null
     } catch (error) {
-      console.error("Handy: Error setting stroke settings:", error);
-      return null;
+      console.error('Handy: Error setting stroke settings:', error)
+      return null
     }
   }
 
@@ -642,12 +642,12 @@ export class HandyApi {
    */
   public async getServerTime(): Promise<number | null> {
     try {
-      const response = await fetch(`${this.baseV3Url}/servertime`);
-      const data = await response.json();
-      return data.server_time || null;
+      const response = await fetch(`${this.baseV3Url}/servertime`)
+      const data = await response.json()
+      return data.server_time || null
     } catch (error) {
-      console.error("Handy: Error getting server time:", error);
-      return null;
+      console.error('Handy: Error getting server time:', error)
+      return null
     }
   }
 
@@ -657,51 +657,51 @@ export class HandyApi {
    */
   public async syncServerTime(sampleCount = 10): Promise<number> {
     try {
-      const samples: { rtd: number; offset: number }[] = [];
+      const samples: { rtd: number; offset: number }[] = []
 
       for (let i = 0; i < sampleCount; i++) {
         try {
-          const start = Date.now();
-          const serverTime = await this.getServerTime();
+          const start = Date.now()
+          const serverTime = await this.getServerTime()
 
-          if (!serverTime) continue;
+          if (!serverTime) continue
 
-          const end = Date.now();
-          const rtd = end - start; // Round trip delay
-          const serverTimeEst = rtd / 2 + serverTime;
+          const end = Date.now()
+          const rtd = end - start // Round trip delay
+          const serverTimeEst = rtd / 2 + serverTime
 
           samples.push({
             rtd,
             offset: serverTimeEst - end,
-          });
+          })
         } catch (error) {
-          console.warn("Error during time sync sample:", error);
+          console.warn('Error during time sync sample:', error)
           // Continue with other samples
         }
       }
 
       // Sort samples by RTD (Round Trip Delay) to get the most accurate ones
       if (samples.length > 0) {
-        samples.sort((a, b) => a.rtd - b.rtd);
+        samples.sort((a, b) => a.rtd - b.rtd)
 
         // Use 80% of the most accurate samples if we have enough
         const usableSamples =
           samples.length > 3
             ? samples.slice(0, Math.ceil(samples.length * 0.8))
-            : samples;
+            : samples
 
         const averageOffset =
           usableSamples.reduce((acc, sample) => acc + sample.offset, 0) /
-          usableSamples.length;
+          usableSamples.length
 
-        this.serverTimeOffset = averageOffset;
-        return averageOffset;
+        this.serverTimeOffset = averageOffset
+        return averageOffset
       }
 
-      return this.serverTimeOffset;
+      return this.serverTimeOffset
     } catch (error) {
-      console.error("Error syncing time:", error);
-      return this.serverTimeOffset;
+      console.error('Error syncing time:', error)
+      return this.serverTimeOffset
     }
   }
 
@@ -714,14 +714,14 @@ export class HandyApi {
    */
   public createEventSource(): EventSource {
     if (this._eventSource) {
-      this._eventSource.close();
+      this._eventSource.close()
     }
 
     this._eventSource = new EventSource(
-      `${this.baseV3Url}/sse?ck=${this.connectionKey}&apikey=${this.applicationId}`
-    );
+      `${this.baseV3Url}/sse?ck=${this.connectionKey}&apikey=${this.applicationId}`,
+    )
 
-    return this._eventSource;
+    return this._eventSource
   }
 
   /**
@@ -729,8 +729,8 @@ export class HandyApi {
    */
   public closeEventSource(): void {
     if (this._eventSource) {
-      this._eventSource.close();
-      this._eventSource = null;
+      this._eventSource.close()
+      this._eventSource = null
     }
   }
 }
@@ -740,7 +740,7 @@ export const createHandyApi = (
   baseV3Url: string,
   baseV2Url: string,
   applicationId: string,
-  connectionKey = ""
+  connectionKey = '',
 ): HandyApi => {
-  return new HandyApi(baseV3Url, baseV2Url, applicationId, connectionKey);
-};
+  return new HandyApi(baseV3Url, baseV2Url, applicationId, connectionKey)
+}

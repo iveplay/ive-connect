@@ -13,16 +13,16 @@
  */
 export function isWebBluetoothSupported(): boolean {
   return (
-    typeof window !== "undefined" &&
-    typeof window.navigator !== "undefined" &&
+    typeof window !== 'undefined' &&
+    typeof window.navigator !== 'undefined' &&
     (navigator as any).bluetooth !== undefined
-  );
+  )
 }
 
 /**
  * Generate name for the client
  */
-export function generateClientName(prefix: string = "IVE-Connect"): string {
+export function generateClientName(prefix: string = 'IVE-Connect'): string {
   // Add a random suffix to make the client name unique
-  return `${prefix}-${Math.floor(Math.random() * 10000)}`;
+  return `${prefix}-${Math.floor(Math.random() * 10000)}`
 }

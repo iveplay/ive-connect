@@ -12,51 +12,51 @@ import {
   Funscript,
   FunscriptAction,
   HapticDevice,
-} from "../../core/device-interface";
-import { EventEmitter } from "../../core/events";
-import { AutoblowSettings, AutoblowDeviceType } from "./types";
+} from '../../core/device-interface'
+import { EventEmitter } from '../../core/events'
+import { AutoblowSettings, AutoblowDeviceType } from './types'
 
 // Use type imports for SDK types to avoid runtime issues
-import type * as AutoblowSdkTypes from "@xsense/autoblow-sdk";
+import type * as AutoblowSdkTypes from '@xsense/autoblow-sdk'
 
 /**
  * Default Autoblow configuration
  */
 const DEFAULT_CONFIG: AutoblowSettings = {
-  id: "autoblow",
-  name: "Autoblow",
+  id: 'autoblow',
+  name: 'Autoblow',
   enabled: true,
-  deviceToken: "",
+  deviceToken: '',
   offset: 0,
-};
+}
 
 /**
  * Autoblow device implementation
  */
 export class AutoblowDevice extends EventEmitter implements HapticDevice {
-  private _config: AutoblowSettings;
-  private _connectionState: ConnectionState = ConnectionState.DISCONNECTED;
-  private _deviceInfo: AutoblowSdkTypes.DeviceInfo | null = null;
+  private _config: AutoblowSettings
+  private _connectionState: ConnectionState = ConnectionState.DISCONNECTED
+  private _deviceInfo: AutoblowSdkTypes.DeviceInfo | null = null
   private _device: AutoblowSdkTypes.Ultra | AutoblowSdkTypes.Vacuglide | null =
-    null;
-  private _deviceType: AutoblowDeviceType | null = null;
-  private _isPlaying: boolean = false;
-  private _scriptPrepared: boolean = false;
+    null
+  private _deviceType: AutoblowDeviceType | null = null
+  private _isPlaying: boolean = false
+  private _scriptPrepared: boolean = false
 
-  readonly id: string = "autoblow";
-  readonly name: string = "Autoblow";
-  readonly type: string = "autoblow";
+  readonly id: string = 'autoblow'
+  readonly name: string = 'Autoblow'
+  readonly type: string = 'autoblow'
   readonly capabilities: DeviceCapability[] = [
     DeviceCapability.LINEAR,
     DeviceCapability.STROKE,
-  ];
+  ]
 
   constructor(config?: Partial<AutoblowSettings>) {
-    super();
+    super()
 
-    this._config = { ...DEFAULT_CONFIG };
+    this._config = { ...DEFAULT_CONFIG }
     if (config) {
-      Object.assign(this._config, config);
+      Object.assign(this._config, config)
     }
   }
 
@@ -64,21 +64,21 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
    * Get connected state
    */
   get isConnected(): boolean {
-    return this._connectionState === ConnectionState.CONNECTED;
+    return this._connectionState === ConnectionState.CONNECTED
   }
 
   /**
    * Get playing state
    */
   get isPlaying(): boolean {
-    return this._isPlaying;
+    return this._isPlaying
   }
 
   /**
    * Get the device type (ultra or vacuglide)
    */
   get deviceType(): AutoblowDeviceType | null {
-    return this._deviceType;
+    return this._deviceType
   }
 
   /**
@@ -87,63 +87,63 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
   async connect(config?: Partial<AutoblowSettings>): Promise<boolean> {
     try {
       if (config) {
-        await this.updateConfig(config);
+        await this.updateConfig(config)
       }
 
       if (!this._config.deviceToken || this._config.deviceToken.length < 5) {
-        this.emit("error", "Device token must be at least 5 characters");
-        return false;
+        this.emit('error', 'Device token must be at least 5 characters')
+        return false
       }
 
-      this._connectionState = ConnectionState.CONNECTING;
-      this.emit("connectionStateChanged", this._connectionState);
+      this._connectionState = ConnectionState.CONNECTING
+      this.emit('connectionStateChanged', this._connectionState)
 
       // Dynamically import the SDK
-      let sdk: typeof AutoblowSdkTypes;
+      let sdk: typeof AutoblowSdkTypes
       try {
-        sdk = await import("@xsense/autoblow-sdk");
+        sdk = await import('@xsense/autoblow-sdk')
       } catch (error) {
         this.emit(
-          "error",
-          "Failed to load Autoblow SDK. Make sure @xsense/autoblow-sdk is installed."
-        );
-        this._connectionState = ConnectionState.DISCONNECTED;
-        this.emit("connectionStateChanged", this._connectionState);
-        return false;
+          'error',
+          'Failed to load Autoblow SDK. Make sure @xsense/autoblow-sdk is installed.',
+        )
+        this._connectionState = ConnectionState.DISCONNECTED
+        this.emit('connectionStateChanged', this._connectionState)
+        return false
       }
 
       // Initialize device connection
-      const result = await sdk.deviceInit(this._config.deviceToken);
+      const result = await sdk.deviceInit(this._config.deviceToken)
 
       // Store the appropriate device reference
       if (result.ultra) {
-        this._device = result.ultra;
-        this._deviceType = "autoblow-ultra";
+        this._device = result.ultra
+        this._deviceType = 'autoblow-ultra'
       } else if (result.vacuglide) {
-        this._device = result.vacuglide;
-        this._deviceType = "vacuglide";
+        this._device = result.vacuglide
+        this._deviceType = 'vacuglide'
       } else {
-        throw new Error("No device returned from SDK");
+        throw new Error('No device returned from SDK')
       }
 
-      this._deviceInfo = result.deviceInfo;
-      this._connectionState = ConnectionState.CONNECTED;
+      this._deviceInfo = result.deviceInfo
+      this._connectionState = ConnectionState.CONNECTED
 
-      this.emit("connectionStateChanged", this._connectionState);
-      this.emit("connected", this.getDeviceInfo());
+      this.emit('connectionStateChanged', this._connectionState)
+      this.emit('connected', this.getDeviceInfo())
 
-      return true;
+      return true
     } catch (error) {
-      console.error("Autoblow: Error connecting to device:", error);
-      this._connectionState = ConnectionState.DISCONNECTED;
-      this.emit("connectionStateChanged", this._connectionState);
+      console.error('Autoblow: Error connecting to device:', error)
+      this._connectionState = ConnectionState.DISCONNECTED
+      this.emit('connectionStateChanged', this._connectionState)
       this.emit(
-        "error",
+        'error',
         `Connection error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      return false;
+        }`,
+      )
+      return false
     }
   }
 
@@ -153,26 +153,26 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
   async disconnect(): Promise<boolean> {
     try {
       if (this._isPlaying) {
-        await this.stop();
+        await this.stop()
       }
 
-      this._device = null;
-      this._deviceInfo = null;
-      this._deviceType = null;
-      this._isPlaying = false;
-      this._scriptPrepared = false;
-      this._connectionState = ConnectionState.DISCONNECTED;
+      this._device = null
+      this._deviceInfo = null
+      this._deviceType = null
+      this._isPlaying = false
+      this._scriptPrepared = false
+      this._connectionState = ConnectionState.DISCONNECTED
 
-      this.emit("connectionStateChanged", this._connectionState);
-      this.emit("disconnected");
+      this.emit('connectionStateChanged', this._connectionState)
+      this.emit('disconnected')
 
-      return true;
+      return true
     } catch (error) {
-      console.error("Autoblow: Error disconnecting:", error);
-      this._connectionState = ConnectionState.DISCONNECTED;
-      this.emit("connectionStateChanged", this._connectionState);
-      this.emit("disconnected");
-      return true;
+      console.error('Autoblow: Error disconnecting:', error)
+      this._connectionState = ConnectionState.DISCONNECTED
+      this.emit('connectionStateChanged', this._connectionState)
+      this.emit('disconnected')
+      return true
     }
   }
 
@@ -180,7 +180,7 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
    * Get current configuration
    */
   getConfig(): AutoblowSettings {
-    return { ...this._config };
+    return { ...this._config }
   }
 
   /**
@@ -188,32 +188,32 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
    */
   async updateConfig(config: Partial<AutoblowSettings>): Promise<boolean> {
     if (config.deviceToken !== undefined) {
-      this._config.deviceToken = config.deviceToken;
+      this._config.deviceToken = config.deviceToken
     }
 
     if (config.offset !== undefined) {
-      this._config.offset = config.offset;
+      this._config.offset = config.offset
 
       // Apply offset to device if connected
       if (this.isConnected && this._device) {
         try {
-          await this._device.syncScriptOffset(config.offset);
+          await this._device.syncScriptOffset(config.offset)
         } catch (error) {
-          console.error("Autoblow: Error setting offset:", error);
+          console.error('Autoblow: Error setting offset:', error)
         }
       }
     }
 
     if (config.name !== undefined) {
-      this._config.name = config.name;
+      this._config.name = config.name
     }
 
     if (config.enabled !== undefined) {
-      this._config.enabled = config.enabled;
+      this._config.enabled = config.enabled
     }
 
-    this.emit("configChanged", this._config);
-    return true;
+    this.emit('configChanged', this._config)
+    return true
   }
 
   /**
@@ -224,7 +224,7 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
    */
   async prepareScript(funscript: Funscript): Promise<DeviceScriptLoadResult> {
     if (!this.isConnected || !this._device) {
-      return { success: false, error: "Device not connected" };
+      return { success: false, error: 'Device not connected' }
     }
 
     try {
@@ -232,8 +232,8 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
       if (!funscript.actions || !Array.isArray(funscript.actions)) {
         return {
           success: false,
-          error: "Invalid script format: Missing actions array",
-        };
+          error: 'Invalid script format: Missing actions array',
+        }
       }
 
       // Convert to Autoblow SDK format and upload
@@ -242,28 +242,28 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
           at: action.at,
           pos: action.pos,
         })),
-      };
+      }
 
       await this._device.syncScriptUploadFunscriptFile(
-        sdkFunscript as AutoblowSdkTypes.Funscript
-      );
+        sdkFunscript as AutoblowSdkTypes.Funscript,
+      )
 
-      this._scriptPrepared = true;
+      this._scriptPrepared = true
 
-      this.emit("scriptLoaded", {
-        type: "funscript",
+      this.emit('scriptLoaded', {
+        type: 'funscript',
         actions: funscript.actions.length,
-      });
+      })
 
-      return { success: true };
+      return { success: true }
     } catch (error) {
-      console.error("Autoblow: Error preparing script:", error);
+      console.error('Autoblow: Error preparing script:', error)
       return {
         success: false,
         error: `Script preparation error: ${
           error instanceof Error ? error.message : String(error)
         }`,
-      };
+      }
     }
   }
 
@@ -273,44 +273,44 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
   async play(
     timeMs: number,
     _playbackRate: number = 1.0,
-    _loop: boolean = false
+    _loop: boolean = false,
   ): Promise<boolean> {
     if (!this.isConnected || !this._device) {
-      this.emit("error", "Cannot play: Device not connected");
-      return false;
+      this.emit('error', 'Cannot play: Device not connected')
+      return false
     }
 
     if (!this._scriptPrepared) {
-      this.emit("error", "Cannot play: No script prepared");
-      return false;
+      this.emit('error', 'Cannot play: No script prepared')
+      return false
     }
 
     try {
       // Apply offset before starting
       if (this._config.offset !== 0) {
-        await this._device.syncScriptOffset(this._config.offset);
+        await this._device.syncScriptOffset(this._config.offset)
       }
 
-      await this._device.syncScriptStart(timeMs);
-      this._isPlaying = true;
+      await this._device.syncScriptStart(timeMs)
+      this._isPlaying = true
 
-      this.emit("playbackStateChanged", {
+      this.emit('playbackStateChanged', {
         isPlaying: this._isPlaying,
         timeMs,
-      });
+      })
 
-      return true;
+      return true
     } catch (error) {
-      console.error("Autoblow: Error starting playback:", error);
-      this._isPlaying = false;
+      console.error('Autoblow: Error starting playback:', error)
+      this._isPlaying = false
       this.emit(
-        "error",
+        'error',
         `Playback error: ${
           error instanceof Error ? error.message : String(error)
-        }`
-      );
-      this.emit("playbackStateChanged", { isPlaying: false });
-      return false;
+        }`,
+      )
+      this.emit('playbackStateChanged', { isPlaying: false })
+      return false
     }
   }
 
@@ -319,25 +319,25 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
    */
   async stop(): Promise<boolean> {
     if (!this.isConnected || !this._device) {
-      this.emit("error", "Cannot stop: Device not connected");
-      return false;
+      this.emit('error', 'Cannot stop: Device not connected')
+      return false
     }
 
     try {
-      await this._device.syncScriptStop();
-      this._isPlaying = false;
+      await this._device.syncScriptStop()
+      this._isPlaying = false
 
-      this.emit("playbackStateChanged", { isPlaying: false });
-      return true;
+      this.emit('playbackStateChanged', { isPlaying: false })
+      return true
     } catch (error) {
-      console.error("Autoblow: Error stopping playback:", error);
-      this._isPlaying = false;
+      console.error('Autoblow: Error stopping playback:', error)
+      this._isPlaying = false
       this.emit(
-        "error",
-        `Stop error: ${error instanceof Error ? error.message : String(error)}`
-      );
-      this.emit("playbackStateChanged", { isPlaying: false });
-      return false;
+        'error',
+        `Stop error: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      this.emit('playbackStateChanged', { isPlaying: false })
+      return false
     }
   }
 
@@ -347,16 +347,16 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
    */
   async syncTime(timeMs: number, _filter?: number): Promise<boolean> {
     if (!this.isConnected || !this._isPlaying || !this._device) {
-      return false;
+      return false
     }
 
     try {
       // Autoblow doesn't have a direct sync method, restart at new position
-      await this._device.syncScriptStart(timeMs);
-      return true;
+      await this._device.syncScriptStart(timeMs)
+      return true
     } catch (error) {
-      console.error("Autoblow: Error syncing time:", error);
-      return false;
+      console.error('Autoblow: Error syncing time:', error)
+      return false
     }
   }
 
@@ -365,18 +365,18 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
    */
   async setOffset(offsetMs: number): Promise<boolean> {
     if (!this.isConnected || !this._device) {
-      this.emit("error", "Cannot set offset: Device not connected");
-      return false;
+      this.emit('error', 'Cannot set offset: Device not connected')
+      return false
     }
 
     try {
-      await this._device.syncScriptOffset(offsetMs);
-      this._config.offset = offsetMs;
-      this.emit("configChanged", this._config);
-      return true;
+      await this._device.syncScriptOffset(offsetMs)
+      this._config.offset = offsetMs
+      this.emit('configChanged', this._config)
+      return true
     } catch (error) {
-      console.error("Autoblow: Error setting offset:", error);
-      return false;
+      console.error('Autoblow: Error setting offset:', error)
+      return false
     }
   }
 
@@ -389,14 +389,14 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
     | null
   > {
     if (!this.isConnected || !this._device) {
-      return null;
+      return null
     }
 
     try {
-      return await this._device.getState();
+      return await this._device.getState()
     } catch (error) {
-      console.error("Autoblow: Error getting state:", error);
-      return null;
+      console.error('Autoblow: Error getting state:', error)
+      return null
     }
   }
 
@@ -404,7 +404,7 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
    * Get device information
    */
   getDeviceInfo(): DeviceInfo | null {
-    if (!this._deviceInfo) return null;
+    if (!this._deviceInfo) return null
 
     return {
       id: this.id,
@@ -416,6 +416,6 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
       hardware: this._deviceInfo.hardwareVersion,
       firmwareStatus: this._deviceInfo.firmwareStatus,
       mac: this._deviceInfo.mac,
-    };
+    }
   }
 }

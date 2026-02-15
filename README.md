@@ -18,34 +18,34 @@ npm install ive-connect
 ## Quick Start
 
 ```typescript
-import { DeviceManager, HandyDevice } from "ive-connect";
+import { DeviceManager, HandyDevice } from 'ive-connect'
 
 // Create a device manager
-const manager = new DeviceManager();
+const manager = new DeviceManager()
 
 // Create and register a Handy device
 const handyDevice = new HandyDevice({
-  connectionKey: "your-connection-key",
-});
-manager.registerDevice(handyDevice);
+  connectionKey: 'your-connection-key',
+})
+manager.registerDevice(handyDevice)
 
 // Connect to the device
-await handyDevice.connect();
+await handyDevice.connect()
 
 // Load a script
 await handyDevice.loadScript({
-  type: "funscript",
-  url: "https://example.com/script.funscript",
-});
+  type: 'funscript',
+  url: 'https://example.com/script.funscript',
+})
 
 // Start playback
-await handyDevice.play(0, 1.0, false);
+await handyDevice.play(0, 1.0, false)
 
 // Later, stop playback
-await handyDevice.stop();
+await handyDevice.stop()
 
 // Disconnect when done
-await handyDevice.disconnect();
+await handyDevice.disconnect()
 ```
 
 ## Supported Devices
@@ -53,18 +53,18 @@ await handyDevice.disconnect();
 ### Handy
 
 ```typescript
-import { HandyDevice } from "ive-connect";
+import { HandyDevice } from 'ive-connect'
 
 const handy = new HandyDevice({
-  connectionKey: "your-connection-key",
+  connectionKey: 'your-connection-key',
   // Optional custom configuration
-  baseV3Url: "https://www.handyfeeling.com/api/v3",
-  baseV2Url: "https://www.handyfeeling.com/api/v2",
-  applicationId: "YourAppName",
-});
+  baseV3Url: 'https://www.handyfeeling.com/api/v3',
+  baseV2Url: 'https://www.handyfeeling.com/api/v2',
+  applicationId: 'YourAppName',
+})
 
 // Connect to the device
-await handy.connect();
+await handy.connect()
 
 // Update configuration
 await handy.updateConfig({
@@ -73,31 +73,31 @@ await handy.updateConfig({
     min: 0.1, // Min stroke position (0.0 to 1.0)
     max: 0.9, // Max stroke position (0.0 to 1.0)
   },
-});
+})
 
 // Listen for events
-handy.on("connected", (deviceInfo) => {
-  console.log("Connected to Handy:", deviceInfo);
-});
+handy.on('connected', (deviceInfo) => {
+  console.log('Connected to Handy:', deviceInfo)
+})
 
-handy.on("playbackStateChanged", (state) => {
-  console.log("Playback state changed:", state.isPlaying);
-});
+handy.on('playbackStateChanged', (state) => {
+  console.log('Playback state changed:', state.isPlaying)
+})
 ```
 
 ### Using the Device Manager
 
 ```typescript
-import { DeviceManager, HandyDevice } from "ive-connect";
+import { DeviceManager, HandyDevice } from 'ive-connect'
 
 // Create a device manager
-const manager = new DeviceManager();
+const manager = new DeviceManager()
 
 // Register devices
 const handy = new HandyDevice({
-  connectionKey: "your-connection-key",
-});
-manager.registerDevice(handy);
+  connectionKey: 'your-connection-key',
+})
+manager.registerDevice(handy)
 ```
 
 ## License
