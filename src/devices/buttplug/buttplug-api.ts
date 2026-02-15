@@ -1,17 +1,6 @@
 /**
- * Buttplug API wrapper
- *
- * Handles communication with the Buttplug library
+ * Buttplug API — high-level device management over Buttplug v4 protocol
  */
-import {
-  ButtplugClient,
-  ButtplugClientDevice,
-  ButtplugDeviceError,
-  ButtplugError,
-  ButtplugBrowserWebsocketClientConnector,
-  DeviceOutput,
-  OutputType,
-} from 'buttplug'
 import { EventEmitter } from '../../core/events'
 import {
   ButtplugConnectionState,
@@ -19,265 +8,165 @@ import {
   ButtplugDeviceInfo,
   DevicePreference,
 } from './types'
+import { ButtplugWs } from './buttplug-ws'
 
-const DEBUG_WEBSOCKET = false
+interface FeatureOutput {
+  Value: number[] // [min, max] step range
+  Duration?: number
+}
+
+interface DeviceFeature {
+  featureIndex: number
+  type: string
+  maxSteps: number // max value from Output[type].Value[1]
+}
 
 export class ButtplugApi extends EventEmitter {
-  private client: ButtplugClient | null = null
-  private devices: Map<number, ButtplugDeviceInfo> = new Map()
-  private devicePreferences: Map<number, DevicePreference> = new Map()
-  public isScanning: boolean = false
-  private connectionState: ButtplugConnectionState =
-    ButtplugConnectionState.DISCONNECTED
+  private ws: ButtplugWs
+  private devices = new Map<number, ButtplugDeviceInfo>()
+  private devicePreferences = new Map<number, DevicePreference>()
+  private features = new Map<number, DeviceFeature[]>()
+  public isScanning = false
+  private connectionState = ButtplugConnectionState.DISCONNECTED
   private connectedUrl?: string
   private clientName: string
 
   constructor(clientName: string = 'IVE-Connect') {
     super()
     this.clientName = clientName
+    this.ws = new ButtplugWs((type, payload) => this.onMessage(type, payload))
   }
 
-  /**
-   * Get the current connection state
-   */
   getConnectionState(): ButtplugConnectionState {
     return this.connectionState
   }
-
-  /**
-   * Get the current connected server URL if any
-   */
   getConnectedUrl(): string | undefined {
     return this.connectedUrl
   }
-
-  /**
-   * Get the list of connected devices
-   */
   getDevices(): ButtplugDeviceInfo[] {
     return Array.from(this.devices.values())
   }
-
-  /**
-   * Get the scanning state
-   */
   getIsScanning(): boolean {
     return this.isScanning
   }
-
-  /**
-   * Set a device preference
-   */
-  setDevicePreference(deviceIndex: number, preference: DevicePreference): void {
-    this.devicePreferences.set(deviceIndex, preference)
-    this.emit('devicePreferenceChanged', { deviceIndex, preference })
-  }
-
-  /**
-   * Get device preferences
-   */
   getDevicePreferences(): Map<number, DevicePreference> {
     return this.devicePreferences
   }
 
-  /**
-   * Connect to a Buttplug server
-   */
+  setDevicePreference(index: number, pref: DevicePreference): void {
+    this.devicePreferences.set(index, pref)
+    this.emit('devicePreferenceChanged', {
+      deviceIndex: index,
+      preference: pref,
+    })
+  }
+
+  // ── Connection ──────────────────────────────────────────────────
+
   async connect(
     type: ButtplugConnectionType,
     serverUrl?: string,
   ): Promise<boolean> {
     if (this.connectionState !== ButtplugConnectionState.DISCONNECTED) {
-      // Clean up any existing connection
       await this.disconnect()
+    }
+    if (type !== ButtplugConnectionType.WEBSOCKET || !serverUrl) {
+      this.emit('error', 'WebSocket URL required')
+      return false
     }
 
     try {
       this.connectionState = ButtplugConnectionState.CONNECTING
       this.emit('connectionStateChanged', this.connectionState)
 
-      // Create a new client
-      this.client = new ButtplugClient(this.clientName)
-      this.setupClientListeners()
+      await this.ws.open(serverUrl, this.clientName)
 
-      let connector
-      if (type === ButtplugConnectionType.WEBSOCKET) {
-        if (!serverUrl) {
-          throw new Error('Server URL is required for WebSocket connection')
-        }
-        connector = new ButtplugBrowserWebsocketClientConnector(serverUrl)
-        this.connectedUrl = serverUrl
-      } else {
-        throw new Error(`Unsupported connection type: ${type}`)
-      }
-
-      await this.client.connect(connector)
+      this.connectedUrl = serverUrl
       this.connectionState = ButtplugConnectionState.CONNECTED
       this.emit('connectionStateChanged', this.connectionState)
       return true
-    } catch (error) {
-      console.error('Error connecting to Buttplug server:', error)
-      this.connectionState = ButtplugConnectionState.DISCONNECTED
-      this.emit('connectionStateChanged', this.connectionState)
-      this.emit('error', error instanceof Error ? error.message : String(error))
+    } catch (e) {
+      console.error('Buttplug connect error:', e)
+      this.cleanup()
+      this.emit('error', e instanceof Error ? e.message : String(e))
       return false
     }
   }
 
-  /**
-   * Disconnect from the server
-   */
   async disconnect(): Promise<boolean> {
-    if (!this.client) {
-      return true
-    }
-
-    try {
-      if (this.client.connected) {
-        await this.client.disconnect()
-      }
-    } catch (error) {
-      console.error('Error disconnecting from Buttplug server:', error)
-    }
-
+    this.ws.close()
     this.cleanup()
     return true
   }
 
-  /**
-   * Start scanning for devices
-   */
-  async startScanning(): Promise<boolean> {
-    if (!this.client || !this.client.connected) {
-      this.emit('error', 'Cannot start scanning: Not connected to a server')
-      return false
-    }
+  // ── Scanning ────────────────────────────────────────────────────
 
+  async startScanning(): Promise<boolean> {
+    if (!this.ws.connected) return false
     try {
       this.isScanning = true
-      this.emit('scanningChanged', this.isScanning)
-      await this.client.startScanning()
+      this.emit('scanningChanged', true)
+      await this.ws.send('StartScanning', {})
       return true
-    } catch (error) {
-      console.error('Error starting device scan:', error)
+    } catch (e) {
       this.isScanning = false
-      this.emit('scanningChanged', this.isScanning)
-      this.emit('error', error instanceof Error ? error.message : String(error))
+      this.emit('scanningChanged', false)
+      this.emit('error', e instanceof Error ? e.message : String(e))
       return false
     }
   }
 
-  /**
-   * Stop scanning for devices
-   */
   async stopScanning(): Promise<boolean> {
-    if (!this.client || !this.client.connected) {
-      return false
-    }
-
+    if (!this.ws.connected) return false
     try {
-      await this.client.stopScanning()
+      await this.ws.send('StopScanning', {})
       return true
-    } catch (error) {
-      console.error('Error stopping device scan:', error)
+    } catch {
       this.isScanning = false
-      this.emit('scanningChanged', this.isScanning)
-      this.emit('error', error instanceof Error ? error.message : String(error))
+      this.emit('scanningChanged', false)
       return false
     }
   }
 
-  /**
-   * Send a vibrate command to a device
-   */
+  // ── Device commands ─────────────────────────────────────────────
+
   async vibrateDevice(index: number, speed: number): Promise<boolean> {
-    if (DEBUG_WEBSOCKET)
-      console.log(`[BUTTPLUG-WS] Vibrate device ${index}: speed=${speed}`)
-
-    const device = this.getClientDevice(index)
-    if (!device) {
-      this.emit('error', `No device with index ${index}`)
-      return false
-    }
-
-    if (!device.hasOutput(OutputType.Vibrate)) {
-      this.emit('error', `Device ${index} does not support vibrate commands`)
-      return false
-    }
-
-    try {
-      await device.runOutput(DeviceOutput.Vibrate.percent(speed))
-      return true
-    } catch (error) {
-      this.handleDeviceCommandError(error, 'vibrate')
-      return false
-    }
+    return this.outputCmd(index, 'Vibrate', speed)
   }
 
-  /**
-   * Send a linear/position command to a device
-   */
   async linearDevice(
     index: number,
     position: number,
     duration: number,
   ): Promise<boolean> {
-    if (DEBUG_WEBSOCKET)
-      console.log(
-        `[BUTTPLUG-WS] Linear device ${index}: position=${position}, duration=${duration}`,
-      )
-
-    const device = this.getClientDevice(index)
-    if (!device) {
-      this.emit('error', `No device with index ${index}`)
-      return false
-    }
-
-    if (!device.hasOutput(OutputType.Position)) {
-      this.emit('error', `Device ${index} does not support linear commands`)
-      return false
-    }
-
+    const feat = this.findFeature(index, 'HwPositionWithDuration')
+    if (!feat) return false
     try {
-      await device.runOutput(
-        DeviceOutput.PositionWithDuration.percent(position, duration),
+      const value = Math.ceil(
+        feat.maxSteps * Math.min(1, Math.max(0, position)),
       )
+      await this.ws.send('OutputCmd', {
+        DeviceIndex: index,
+        FeatureIndex: feat.featureIndex,
+        Command: {
+          HwPositionWithDuration: {
+            Value: value,
+            Duration: Math.round(duration),
+          },
+        },
+      })
       return true
-    } catch (error) {
-      this.handleDeviceCommandError(error, 'linear')
+    } catch {
       return false
     }
   }
 
-  /**
-   * Send a rotate command to a device
-   */
   async rotateDevice(
     index: number,
     speed: number,
     _clockwise: boolean,
   ): Promise<boolean> {
-    if (DEBUG_WEBSOCKET)
-      console.log(`[BUTTPLUG-WS] Rotate device ${index}: speed=${speed}`)
-
-    const device = this.getClientDevice(index)
-    if (!device) {
-      this.emit('error', `No device with index ${index}`)
-      return false
-    }
-
-    if (!device.hasOutput(OutputType.Rotate)) {
-      this.emit('error', `Device ${index} does not support rotate commands`)
-      return false
-    }
-
-    try {
-      await device.runOutput(DeviceOutput.Rotate.percent(speed))
-      return true
-    } catch (error) {
-      this.handleDeviceCommandError(error, 'rotate')
-      return false
-    }
+    return this.outputCmd(index, 'Rotate', speed)
   }
 
   async oscillateDevice(
@@ -285,248 +174,176 @@ export class ButtplugApi extends EventEmitter {
     speed: number,
     _frequency: number,
   ): Promise<boolean> {
-    if (DEBUG_WEBSOCKET)
-      console.log(`[BUTTPLUG-WS] Oscillate device ${index}: speed=${speed}`)
-
-    const device = this.getClientDevice(index)
-    if (!device) {
-      this.emit('error', `No device with index ${index}`)
-      return false
-    }
-
-    if (!device.hasOutput(OutputType.Oscillate)) {
-      this.emit('error', `Device ${index} does not support oscillate commands`)
-      return false
-    }
-
-    try {
-      await device.runOutput(DeviceOutput.Oscillate.percent(speed))
-      return true
-    } catch (error) {
-      this.handleDeviceCommandError(error, 'oscillate')
-      return false
-    }
+    return this.outputCmd(index, 'Oscillate', speed)
   }
 
-  /**
-   * Stop a specific device
-   */
   async stopDevice(index: number): Promise<boolean> {
-    const device = this.getClientDevice(index)
-    if (!device) {
-      this.emit('error', `No device with index ${index}`)
-      return false
-    }
-
+    const d = this.devices.get(index)
+    if (!d) return false
     try {
-      const deviceInfo = this.devices.get(index)
+      if (d.canVibrate) await this.outputCmd(index, 'Vibrate', 0.01)
+      else if (d.canRotate) await this.outputCmd(index, 'Rotate', 0.01)
+      else if (d.canLinear) await this.linearDevice(index, 0.01, 500)
 
-      // Send a gentle command before stopping to prevent device jerking
-      if (deviceInfo) {
-        try {
-          if (deviceInfo.canVibrate) {
-            await device.runOutput(DeviceOutput.Vibrate.percent(0.01))
-          } else if (deviceInfo.canRotate) {
-            await device.runOutput(DeviceOutput.Rotate.percent(0.01))
-          } else if (deviceInfo.canLinear) {
-            await device.runOutput(
-              DeviceOutput.PositionWithDuration.percent(0.01, 500),
-            )
-          }
-        } catch (e) {
-          console.error(`Error sending gentle command before stop:`, e)
-        }
-      }
-
-      // Use setTimeout to ensure the gentle command has time to take effect
-      await new Promise<void>((resolve) => {
-        setTimeout(async () => {
-          try {
-            await device.stop()
-            resolve()
-          } catch (e) {
-            console.error(`Stop command error:`, e)
-            resolve()
-          }
-        }, 100)
+      await this.delay(100)
+      await this.ws.send('StopCmd', {
+        DeviceIndex: index,
+        FeatureIndex: undefined,
+        Inputs: true,
+        Outputs: true,
       })
-
       return true
-    } catch (error) {
-      this.handleDeviceCommandError(error, 'stop')
+    } catch {
       return false
     }
   }
 
-  /**
-   * Stop all devices
-   */
   async stopAllDevices(): Promise<boolean> {
-    if (!this.client) {
-      return false
-    }
-
+    if (!this.ws.connected) return false
     try {
-      // First send gentle commands to all devices
-      for (const [, device] of this.client.devices) {
-        const deviceInfo = this.devices.get(device.index)
-        if (!deviceInfo) continue
-
+      for (const d of this.devices.values()) {
         try {
-          if (deviceInfo.canVibrate) {
-            await device.runOutput(DeviceOutput.Vibrate.percent(0.01))
-          } else if (deviceInfo.canRotate) {
-            await device.runOutput(DeviceOutput.Rotate.percent(0.01))
-          } else if (deviceInfo.canLinear) {
-            await device.runOutput(
-              DeviceOutput.PositionWithDuration.percent(0.01, 500),
-            )
-          }
-        } catch (e) {
-          console.error(`Error sending gentle command before stopAll:`, e)
-        }
+          if (d.canVibrate) await this.outputCmd(d.index, 'Vibrate', 0.01)
+          else if (d.canRotate) await this.outputCmd(d.index, 'Rotate', 0.01)
+          else if (d.canLinear) await this.linearDevice(d.index, 0.01, 500)
+        } catch {}
       }
-
-      // Then stop all devices after a short delay
-      await new Promise<void>((resolve) => {
-        setTimeout(async () => {
-          try {
-            const stopPromises: Promise<void>[] = []
-            for (const [, device] of this.client!.devices) {
-              stopPromises.push(
-                device.stop().catch((e) => {
-                  console.error(`StopAll command error:`, e)
-                }),
-              )
-            }
-            await Promise.all(stopPromises)
-            resolve()
-          } catch (e) {
-            console.error(`Error in stopAllDevices:`, e)
-            resolve()
-          }
-        }, 100)
+      await this.delay(100)
+      await this.ws.send('StopCmd', {
+        DeviceIndex: undefined,
+        FeatureIndex: undefined,
+        Inputs: true,
+        Outputs: true,
       })
-
       return true
-    } catch (error) {
-      console.error('Error stopping all devices:', error)
-      this.emit('error', error instanceof Error ? error.message : String(error))
+    } catch {
       return false
     }
   }
 
-  /**
-   * Set up listeners for client events
-   */
-  private setupClientListeners(): void {
-    if (!this.client) return
+  // ── Internals ───────────────────────────────────────────────────
 
-    this.client.addListener('deviceadded', this.handleDeviceAdded)
-    this.client.addListener('deviceremoved', this.handleDeviceRemoved)
-    this.client.addListener('scanningfinished', this.handleScanningFinished)
-    this.client.addListener('disconnect', this.handleDisconnected)
+  private onMessage(type: string, payload: any): void {
+    switch (type) {
+      case 'DeviceAdded':
+        this.addDevice(payload)
+        break
+      case 'DeviceRemoved':
+        this.removeDevice(payload.DeviceIndex)
+        break
+      case 'DeviceList': {
+        // DeviceList.Devices is an object keyed by index
+        const incoming = payload.Devices || {}
+        // Add new devices
+        for (const dev of Object.values(incoming)) {
+          this.addDevice(dev)
+        }
+        // Remove devices no longer in the list
+        for (const index of this.devices.keys()) {
+          if (!incoming.hasOwnProperty(index.toString())) {
+            this.removeDevice(index)
+          }
+        }
+        break
+      }
+      case 'ScanningFinished':
+        this.isScanning = false
+        this.emit('scanningChanged', false)
+        break
+    }
   }
 
-  /**
-   * Clean up resources when disconnecting
-   */
-  private cleanup(): void {
-    if (this.client) {
-      this.client.removeAllListeners()
-      this.client = null
+  private addDevice(dev: any): void {
+    // DeviceFeatures is an object keyed by feature index
+    const rawFeatures: Record<string, any> = dev.DeviceFeatures || {}
+    const parsed: DeviceFeature[] = []
+
+    for (const [idx, feat] of Object.entries(rawFeatures)) {
+      const output: Record<string, FeatureOutput> | undefined = (feat as any)
+        .Output
+      if (!output) continue
+      for (const [outputType, outputDef] of Object.entries(output)) {
+        parsed.push({
+          featureIndex: parseInt(idx),
+          type: outputType,
+          maxSteps: outputDef.Value?.[1] ?? outputDef.Value ?? 100,
+        })
+      }
     }
 
+    this.features.set(dev.DeviceIndex, parsed)
+
+    const has = (t: string) => parsed.some((f) => f.type === t)
+    const info: ButtplugDeviceInfo = {
+      index: dev.DeviceIndex,
+      name: dev.DeviceDisplayName || dev.DeviceName,
+      canVibrate: has('Vibrate'),
+      canLinear: has('Position') || has('HwPositionWithDuration'),
+      canRotate: has('Rotate'),
+      canOscillate: has('Oscillate'),
+    }
+
+    this.devices.set(dev.DeviceIndex, info)
+    if (!this.devicePreferences.has(dev.DeviceIndex)) {
+      this.devicePreferences.set(dev.DeviceIndex, {
+        enabled: true,
+        useVibrate: info.canVibrate,
+        useRotate: info.canRotate,
+        useLinear: info.canLinear,
+        useOscillate: info.canOscillate,
+      })
+    }
+    this.emit('deviceAdded', info)
+  }
+
+  private removeDevice(index: number): void {
+    const info = this.devices.get(index)
+    if (!info) return
+    this.devices.delete(index)
+    this.features.delete(index)
+    this.emit('deviceRemoved', info)
+  }
+
+  private findFeature(
+    deviceIndex: number,
+    type: string,
+  ): DeviceFeature | undefined {
+    return this.features.get(deviceIndex)?.find((f) => f.type === type)
+  }
+
+  private async outputCmd(
+    deviceIndex: number,
+    outputType: string,
+    percent: number,
+  ): Promise<boolean> {
+    const feat = this.findFeature(deviceIndex, outputType)
+    if (!feat) return false
+    try {
+      const value = Math.ceil(
+        feat.maxSteps * Math.min(1, Math.max(0, percent)),
+      )
+      await this.ws.send('OutputCmd', {
+        DeviceIndex: deviceIndex,
+        FeatureIndex: feat.featureIndex,
+        Command: { [outputType]: { Value: value } },
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private cleanup(): void {
     this.devices.clear()
+    this.features.clear()
     this.isScanning = false
     this.connectionState = ButtplugConnectionState.DISCONNECTED
     this.connectedUrl = undefined
-
     this.emit('connectionStateChanged', this.connectionState)
-    this.emit('scanningChanged', this.isScanning)
+    this.emit('scanningChanged', false)
   }
 
-  /**
-   * Handle a device added event
-   */
-  private handleDeviceAdded = (device: ButtplugClientDevice): void => {
-    const deviceInfo: ButtplugDeviceInfo = {
-      index: device.index,
-      name: device.name,
-      canVibrate: device.hasOutput(OutputType.Vibrate),
-      canLinear: device.hasOutput(OutputType.Position),
-      canRotate: device.hasOutput(OutputType.Rotate),
-      canOscillate: device.hasOutput(OutputType.Oscillate),
-    }
-
-    this.devices.set(device.index, deviceInfo)
-
-    // Set default preferences if none exist
-    if (!this.devicePreferences.has(device.index)) {
-      this.devicePreferences.set(device.index, {
-        enabled: true,
-        useVibrate: deviceInfo.canVibrate,
-        useRotate: deviceInfo.canRotate,
-        useLinear: deviceInfo.canLinear,
-        useOscillate: deviceInfo.canOscillate,
-      })
-    }
-
-    this.emit('deviceAdded', deviceInfo)
-  }
-
-  /**
-   * Handle a device removed event
-   */
-  private handleDeviceRemoved = (device: ButtplugClientDevice): void => {
-    const deviceInfo = this.devices.get(device.index)
-    if (deviceInfo) {
-      this.devices.delete(device.index)
-      this.emit('deviceRemoved', deviceInfo)
-    }
-  }
-
-  /**
-   * Handle scanning finished event
-   */
-  private handleScanningFinished = (): void => {
-    this.isScanning = false
-    this.emit('scanningChanged', this.isScanning)
-  }
-
-  /**
-   * Handle disconnection event
-   */
-  private handleDisconnected = (): void => {
-    this.cleanup()
-  }
-
-  /**
-   * Get a device from the client by index
-   */
-  private getClientDevice(index: number): ButtplugClientDevice | undefined {
-    if (!this.client) return undefined
-    return this.client.devices.get(index)
-  }
-
-  /**
-   * Handle a device command error
-   */
-  private handleDeviceCommandError(error: unknown, command: string): void {
-    if (error instanceof ButtplugDeviceError) {
-      console.error(`Device error on ${command}:`, error.message)
-      this.emit('error', `Device error on ${command}: ${error.message}`)
-    } else if (error instanceof ButtplugError) {
-      console.error(`Buttplug error on ${command}:`, error.message)
-      this.emit('error', `Buttplug error on ${command}: ${error.message}`)
-    } else {
-      console.error(`Unknown error on ${command}:`, error)
-      this.emit(
-        'error',
-        `Unknown error on ${command}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      )
-    }
+  private delay(ms: number): Promise<void> {
+    return new Promise((r) => setTimeout(r, ms))
   }
 }

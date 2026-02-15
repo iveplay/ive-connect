@@ -10,6 +10,7 @@ export * from './handy/types'
 // Buttplug
 export * from './buttplug/buttplug-device'
 export * from './buttplug/buttplug-api'
+export * from './buttplug/buttplug-ws'
 export * from './buttplug/buttplug-server'
 export * from './buttplug/command-helpers'
 export * from './buttplug/types'
