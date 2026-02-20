@@ -151,18 +151,39 @@ export class HandyApi {
    * Upload a script file to the hosting service
    * Returns the URL where the script can be accessed
    */
-  public async uploadScript(scriptFile: File | Blob): Promise<string | null> {
+  public async uploadScript(
+    scriptFile: File | Blob | string,
+  ): Promise<string | null> {
     try {
-      // Convert Blob to File if needed
-      const file =
-        scriptFile instanceof File
-          ? scriptFile
-          : new File([scriptFile], 'script.funscript', {
-              type: 'application/json',
-            })
-
       const formData = new FormData()
-      formData.append('file', file)
+
+      if (typeof scriptFile === 'string') {
+        // String content — works reliably in both browser and React Native.
+        // In React Native, FormData doesn't support Blob/File objects properly,
+        // so callers should pass the raw JSON string instead.
+        const isReactNative =
+          typeof navigator !== 'undefined' &&
+          navigator.product === 'ReactNative'
+
+        if (isReactNative) {
+          // React Native FormData expects { uri, type, name } for file uploads.
+          // Use a data URI to pass inline content without a real file path.
+          const base64 = btoa(scriptFile)
+          formData.append('file', {
+            uri: `data:application/json;base64,${base64}`,
+            type: 'application/json',
+            name: 'script.funscript',
+          } as unknown as Blob)
+        } else {
+          const blob = new Blob([scriptFile], { type: 'application/json' })
+          formData.append('file', blob, 'script.funscript')
+        }
+      } else {
+        // File or Blob — standard browser path
+        const filename =
+          scriptFile instanceof File ? scriptFile.name : 'script.funscript'
+        formData.append('file', scriptFile, filename)
+      }
 
       const response = await fetch(`${this.baseV2Url}/upload`, {
         method: 'POST',

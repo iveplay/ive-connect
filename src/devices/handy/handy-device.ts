@@ -290,12 +290,12 @@ export class HandyDevice extends EventEmitter implements HapticDevice {
     }
 
     try {
-      // Convert funscript to blob and upload
-      const blob = new Blob([JSON.stringify(funscript)], {
-        type: 'application/json',
-      })
+      // Pass raw JSON string — uploadScript handles platform differences
+      // (React Native's FormData doesn't support Blob properly)
+      const uploadedUrl = await this._api.uploadScript(
+        JSON.stringify(funscript),
+      )
 
-      const uploadedUrl = await this._api.uploadScript(blob)
       if (!uploadedUrl) {
         return {
           success: false,
