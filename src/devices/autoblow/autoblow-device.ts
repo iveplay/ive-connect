@@ -236,7 +236,7 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
         }
       }
 
-      // Convert to Autoblow SDK format and upload
+      // Convert to Autoblow SDK format
       const sdkFunscript = {
         actions: funscript.actions.map((action: FunscriptAction) => ({
           at: action.at,
@@ -244,9 +244,53 @@ export class AutoblowDevice extends EventEmitter implements HapticDevice {
         })),
       }
 
-      await this._device.syncScriptUploadFunscriptFile(
-        sdkFunscript as AutoblowSdkTypes.Funscript,
-      )
+      const isReactNative =
+        typeof navigator !== 'undefined' &&
+        navigator.product === 'ReactNative'
+
+      if (isReactNative) {
+        // React Native's FormData doesn't support Blob. Make the API call
+        // directly using the RN-compatible { uri, type, name } pattern.
+        const cluster = this._device.connectedCluster
+        if (!cluster) {
+          return { success: false, error: 'Device cluster not available' }
+        }
+        const clusterUrl = cluster.includes('http')
+          ? cluster
+          : `https://${cluster}`
+
+        const jsonStr = JSON.stringify(sdkFunscript)
+        const base64 = btoa(jsonStr)
+        const formData = new FormData()
+        formData.append('file', {
+          uri: `data:application/json;base64,${base64}`,
+          type: 'application/json',
+          name: 'funscript.json',
+        } as unknown as Blob)
+
+        const response = await fetch(
+          `${clusterUrl}/autoblow/sync-script/upload-funscript`,
+          {
+            method: 'PUT',
+            body: formData,
+            headers: {
+              'x-device-token': this._device.deviceToken,
+            },
+          },
+        )
+
+        if (!response.ok) {
+          const text = await response.text().catch(() => response.statusText)
+          return {
+            success: false,
+            error: `Upload failed (${response.status}): ${text}`,
+          }
+        }
+      } else {
+        await this._device.syncScriptUploadFunscriptFile(
+          sdkFunscript as AutoblowSdkTypes.Funscript,
+        )
+      }
 
       this._scriptPrepared = true
 
